@@ -3,21 +3,19 @@ import streamlit as st
 # 1. 페이지 설정
 st.set_page_config(page_title="도토리다판다 Meat Lab", layout="wide")
 
-# 2. CSS: 디자인 및 문자 버튼 강제 연결 설정
+# 2. CSS 디자인
 st.markdown("""
     <style>
-    .main-title { font-family: 'Black Han Sans', sans-serif; font-size: 100px !important; color: #333; text-align: center; margin-top: 30px; }
-    .sub-title { font-size: 24px !important; color: #666; text-align: center; margin-bottom: 50px; }
-    div[data-baseweb="input"] { border: 3px solid #FF4B4B !important; border-radius: 15px !important; padding: 10px !important; }
-    
-    /* 하단 고정 버튼 */
-    .fixed-footer { position: fixed; bottom: 30px; width: 100%; display: flex; justify-content: center; gap: 20px; z-index: 1000; }
-    .btn-kakao { background-color: #FEE500; color: #3c1e1e; padding: 15px 40px; border-radius: 50px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .btn-sms { background-color: #ffffff; border: 2px solid #000; color: #000; padding: 15px 40px; border-radius: 50px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .main-title { font-family: sans-serif; font-size: 60px !important; color: #333; text-align: center; margin-top: 30px; }
+    .sub-title { font-size: 20px !important; color: #666; text-align: center; margin-bottom: 30px; }
+    div[data-baseweb="input"] { border: 3px solid #FF4B4B !important; border-radius: 15px !important; }
+    .fixed-footer { margin-top: 50px; display: flex; justify-content: center; gap: 20px; }
+    .btn-kakao { background-color: #FEE500; color: #3c1e1e; padding: 15px 40px; border-radius: 50px; font-weight: bold; text-decoration: none; }
+    .btn-sms { background-color: #ffffff; border: 2px solid #000; padding: 15px 40px; border-radius: 50px; font-weight: bold; text-decoration: none; }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 데이터베이스 (40개 전체)
+# 3. 데이터베이스 (기존 데이터 유지)
 expert_db = {
     "육회": {"title": "육회, 부위보다 중요한 것은 '결의 방향과 식감 설계'입니다", "desc": "지방보다 육향과 근섬유 탄력이 핵심입니다.", "points": ["지방보다 육향 중시", "칼질 방향(결 반대)", "수분 보유력 유지"], "parts": {"우둔살": "담백함", "꾸리살": "쫀득함", "홍두깨": "수율"}, "strategy": "컨셉에 맞는 우둔/꾸리 혼합 배합 추천"},
     "갈비탕": {"title": "갈비탕, 살밥과 뼈 절단 기술이 수익을 결정합니다", "desc": "마구리와 갈비의 적절한 조화가 원가 관리의 핵심입니다.", "points": ["뼈와 살의 비율", "핏물 제거 공정", "절단면의 깔끔함"], "parts": {"갈비": "고급 비주얼", "마구리": "깊은 육수"}, "strategy": "인건비 절감을 위한 규격 절단 원육 사용"},
@@ -65,26 +63,37 @@ expert_db = {
 st.markdown('<p class="main-title">도토리다판다</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">사장님의 행복한 하루를 응원합니다 by 권오현</p>', unsafe_allow_html=True)
 
-search_query = st.text_input("", placeholder="궁금한 메뉴를 검색하세요 ex) 육회, 삼겹살, 제육볶음...", label_visibility="collapsed")
+# 새로운 기능: 단가표 & 영업 링크
+col_a, col_b = st.columns([1, 1])
+with col_a:
+    st.subheader("📋 금주 추천 단가표")
+    try: st.image("price.jpg", caption="주 단위 단가표")
+    except: st.warning("이미지 파일 'price.jpg'를 업로드해주세요!")
+with col_b:
+    st.subheader("🎁 영업 혜택")
+    st.info("금천미트 가입 시 추천인란에 **'권오현'** 입력하면 2만 원 혜택!")
+    st.link_button("금천미트 바로가기", "https://www.ekcm.co.kr/")
+
+st.markdown("---")
+search_query = st.text_input("메뉴 검색", placeholder="ex) 육회, 삼겹살...")
 
 if search_query:
     matched_key = next((key for key in expert_db.keys() if search_query in key), None)
     if matched_key:
         data = expert_db[matched_key]
-        st.markdown(f"<div class='expert-card'><h2 style='color:#FF4B4B;'>🏆 {data['title']}</h2><p><b>[연구소 의견]</b> {data['desc']}</p></div>", unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info("💡 **핵심 컨설팅 포인트**")
+        st.subheader(f"🏆 {data['title']}")
+        st.write(f"**연구소 의견:** {data['desc']}")
+        c1, c2 = st.columns(2)
+        with c1:
             for p in data['points']: st.write(f"✅ {p}")
-        with col2:
-            st.info("🥩 **부위별 상세 특징**")
-            for part, desc in data['parts'].items(): st.write(f"🔹 **{part}**: {desc}")
-        st.warning(f"🚀 **B2B 전문가 공급 전략**: {data['strategy']}")
+        with c2:
+            for part, desc in data['parts'].items(): st.write(f"🔹 {part}: {desc}")
+        st.warning(f"🚀 **전문가 공급 전략:** {data['strategy']}")
     else:
-        st.error("해당 메뉴는 아직 푸줏간에 없습니다. 상담 버튼으로 문의주세요!")
+        st.error("해당 메뉴는 연구소에 없습니다.")
 
-# 5. 문자 상담 버튼 (모바일/PC 호환)
-st.markdown(f"""
+# 하단 고정 버튼
+st.markdown("""
     <div class="fixed-footer">
         <a href="https://open.kakao.com/o/sG85euyi" class="btn-kakao">🟡 카카오톡 상담</a>
         <a href="sms:01065038953" class="btn-sms">💬 문자 상담</a>
