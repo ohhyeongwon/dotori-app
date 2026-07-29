@@ -16,7 +16,17 @@ st.markdown("""
 }
 .stApp { background: #ffffff; color: #171a18; }
 .block-container { max-width: 760px; padding-top: 1.1rem; padding-bottom: 5rem; }
-[data-testid="stTextInput"] { margin-top: 150px; margin-bottom: 48px; }
+.hero-copy { margin-top: 108px; margin-bottom: 24px; text-align: center; }
+.hero-title {
+    margin: 0; color: #12291f; font-size: 26px !important; font-weight: 750 !important;
+    line-height: 1.3 !important; letter-spacing: -0.025em;
+}
+.hero-description {
+    margin: 14px 0 0; color: #606762; font-size: 16px; font-weight: 450;
+    line-height: 1.65; letter-spacing: -0.01em;
+}
+.hero-mobile-break { display: none; }
+[data-testid="stTextInput"] { margin: 0; }
 [data-testid="stTextInput"] input {
     min-height: 72px; padding: 0 26px; border: 1px solid #d9dedb;
     border-radius: 12px; background: #ffffff; color: #171a18; font-size: 18px;
@@ -25,6 +35,16 @@ st.markdown("""
 [data-testid="stTextInput"] input::placeholder { color: #858c87; opacity: 1; }
 [data-testid="stTextInput"] input:focus {
     border-color: #173f30; box-shadow: 0 0 0 1px #173f30;
+}
+[data-testid="stHorizontalBlock"] { align-items: stretch; }
+[data-testid="stHorizontalBlock"] [data-testid="stButton"] button {
+    min-height: 72px; border: 1px solid #173f30; border-radius: 12px;
+    background: #173f30; color: #ffffff; font-size: 16px; font-weight: 700;
+    box-shadow: none;
+}
+[data-testid="stHorizontalBlock"] [data-testid="stButton"] button:hover,
+[data-testid="stHorizontalBlock"] [data-testid="stButton"] button:focus {
+    border-color: #123326; background: #123326; color: #ffffff;
 }
 [data-testid="stAlert"], [data-testid="stExpander"] {
     border: 1px solid #e1e5e2; border-radius: 12px;
@@ -39,21 +59,6 @@ st.markdown("""
 .result-details { margin-top: 14px; color: #4f5752; font-size: 14px; line-height: 1.7; }
 .result-details summary { color: #173f30; cursor: pointer; font-weight: 650; }
 .result-details p { margin: 12px 0 0; }
-.signup-card {
-    margin-top: 36px; padding: 32px; border: 1px solid #e5e1d8; border-radius: 12px;
-    background: #ffffff; box-shadow: none; text-align: center;
-}
-.signup-eyebrow { color: #9a7a3d; font-size: 13px; font-weight: 700; letter-spacing: .025em; }
-.signup-title { margin: 24px 0 5px; color: #6d736f; font-size: 13px; font-weight: 600; }
-.signup-name { margin: 0 0 24px; color: #12291f; font-size: 28px; font-weight: 720; }
-.referral-value {
-    margin-bottom: 14px; color: #173f30; font-size: 16px; font-weight: 750;
-}
-.signup-cta {
-    display: flex; align-items: center; justify-content: center; width: 100%; min-height: 50px;
-    padding: 0 18px; border-radius: 12px; background: #173f30; color: #ffffff !important;
-    text-align: center; text-decoration: none !important; font-weight: 700; box-sizing: border-box;
-}
 .market-container { margin-top: 16px; }
 .market-cta {
     display: flex; align-items: center; justify-content: center; min-height: 50px;
@@ -68,13 +73,15 @@ st.markdown("""
 }
 @media (max-width: 700px) {
     .block-container { padding: 0.35rem 16px 1.5rem; }
-    [data-testid="stTextInput"] { margin-top: 60px; margin-bottom: 20px; }
+    .hero-copy { margin-top: 42px; margin-bottom: 20px; }
+    .hero-title { font-size: 27px !important; line-height: 1.35 !important; }
+    .hero-mobile-break { display: block; }
+    .hero-description { margin-top: 12px; font-size: 15px; line-height: 1.6; }
     [data-testid="stHorizontalBlock"] { flex-direction: column; gap: 10px; }
     [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; }
     [data-testid="stTextInput"] input { min-height: 64px; padding: 0 20px; font-size: 17px; }
+    [data-testid="stHorizontalBlock"] [data-testid="stButton"] button { min-height: 52px; }
     .result-card { padding: 22px 18px; }
-    .signup-card { margin-top: 22px; padding: 28px 20px; }
-    .signup-name { margin-bottom: 20px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -422,7 +429,23 @@ def get_realtime_cheapest_price():
         }
 
 # 2. 검색 및 출력 제어 로직
-search_query = st.text_input("메뉴 검색", placeholder="ex) 육회, 돈가스, 삼겹살 등", label_visibility="collapsed")
+st.markdown("""
+<section class="hero-copy">
+    <h1 class="hero-title">메뉴에 맞는 원육을<br class="hero-mobile-break"> 찾아보세요</h1>
+    <p class="hero-description">메뉴를 검색하면<br>추천 원육과 선택 이유를 확인할 수 있습니다.</p>
+</section>
+""", unsafe_allow_html=True)
+
+search_input, search_action = st.columns([5, 1.25], gap="small")
+with search_input:
+    search_query = st.text_input(
+        "메뉴 검색",
+        placeholder="육회, 돈가스, 삼겹살 검색",
+        label_visibility="collapsed"
+    )
+with search_action:
+    st.button("검색", use_container_width=True, type="primary")
+
 matched_key = None
 
 if search_query:
@@ -488,24 +511,142 @@ kg당 가격: {kg_price:,}원
         st.error("해당 메뉴는 연구소에 없습니다.")
 
 # 가입 및 시세 안내
-st.markdown("""
-    <div class='signup-card'>
-        <div class='signup-eyebrow'>금천미트 가입</div>
-        <div class='signup-title'>영업사원 소개</div>
-        <div class='signup-name'>권오현</div>
-        <a class='signup-cta' href='#' onclick="event.preventDefault(); navigator.clipboard.writeText('권오현'); this.textContent='복사되었습니다';">추천인 복사</a>
-    </div>
-""", unsafe_allow_html=True)
+st.iframe("""
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: transparent; }
+body {
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Noto Sans KR", "Malgun Gothic", sans-serif;
+    color: #171a18;
+}
+.signup-card {
+    width: 100%; padding: 24px 32px 18px; border: 1px solid #e5e1d8;
+    border-radius: 12px; background: #ffffff; text-align: center; position: relative;
+}
+.signup-eyebrow {
+    color: #9a7a3d; font-size: 13px; font-weight: 700; letter-spacing: .025em;
+}
+.signup-name {
+    margin: 16px 0 12px; color: #12291f; font-size: 28px; font-weight: 720;
+}
+.signup-benefit {
+    margin: 0 0 16px; color: #606762; font-size: 14px; font-weight: 500;
+    line-height: 1.6; letter-spacing: -0.01em;
+}
+.signup-cta {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    min-height: 50px; padding: 0 18px; border: 0; border-radius: 12px;
+    background: #173f30; color: #ffffff; font: inherit; font-weight: 700;
+    cursor: pointer;
+}
+.signup-cta:hover, .signup-cta:focus { background: #123326; }
+.copy-status {
+    position: absolute; left: 50%; bottom: 12px; z-index: 2;
+    max-width: calc(100% - 40px); margin: 0; padding: 6px 10px;
+    border-radius: 8px; background: #173f30; color: #ffffff;
+    font-size: 13px; line-height: 1.4; white-space: nowrap;
+    opacity: 0; pointer-events: none;
+    transform: translate(-50%, 4px); transition: opacity .15s ease, transform .15s ease;
+}
+.copy-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.copy-status.is-error {
+    background: #8a3b32; color: #ffffff; font-size: 12px; white-space: normal;
+}
+@media (max-width: 700px) {
+    .signup-card { padding: 22px 20px 16px; }
+    .signup-name { margin: 14px 0 10px; }
+    .signup-benefit { margin-bottom: 14px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="signup-card">
+    <div class="signup-eyebrow">금천미트 가입</div>
+    <div class="signup-name">권오현</div>
+    <p class="signup-benefit">가입할 때 ‘영업사원 소개’에 입력하면<br>메뉴와 원육 상담을 빠르게 받을 수 있습니다.</p>
+    <button class="signup-cta" type="button">추천인 복사</button>
+    <p class="copy-status" role="status" aria-live="polite"></p>
+</div>
+<script>
+const button = document.querySelector('.signup-cta');
+const status = document.querySelector('.copy-status');
+const copyText = '권오현';
+
+function setStatus(message, state, duration) {
+    status.textContent = message;
+    status.className = `copy-status is-visible ${state}`;
+    clearTimeout(button.copyStatusTimer);
+    button.copyStatusTimer = setTimeout(() => {
+        status.textContent = '';
+        status.className = 'copy-status';
+    }, duration);
+}
+
+function legacyCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, text.length);
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return copied;
+}
+
+button.addEventListener('click', async () => {
+    let copied = false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(copyText);
+            copied = true;
+        } catch (error) {
+            copied = false;
+        }
+    }
+
+    if (!copied) {
+        try {
+            copied = legacyCopy(copyText);
+        } catch (error) {
+            copied = false;
+        }
+    }
+
+    if (copied) {
+        setStatus('복사되었습니다.', 'is-success', 1600);
+    } else {
+        setStatus(
+            '복사에 실패했습니다. 이름을 직접 선택해 복사해주세요.',
+            'is-error',
+            3500
+        );
+    }
+});
+</script>
+</body>
+</html>
+""", height=230)
 
 st.markdown("""
 <div class='market-container'>
-    <a class='market-cta' href='https://www.ekcm.co.kr/' target='_blank'>365일 도매시세 보기</a>
+    <a class='market-cta' href='https://www.ekcm.co.kr/' target='_blank'>축산물 도매시세 보기</a>
 </div>
 """, unsafe_allow_html=True)
 
 # 카카오톡 상담
 st.markdown(f"""
 <div class='btn-container'>
-    <a href='https://open.kakao.com/o/sG85euyi' class='btn-kakao' target='_blank'>카카오 상담</a>
+    <a href='https://open.kakao.com/o/sG85euyi' class='btn-kakao' target='_blank'>1:1 카카오톡 상담</a>
 </div>
 """, unsafe_allow_html=True)
