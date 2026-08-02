@@ -1,5 +1,8 @@
 import streamlit as st
-import requests  
+from html import escape
+
+from menu_data import get_card_data, get_geumcheon_market_data
+from price_card import create_price_card_png
 
 # =================================================================
 # 1. 페이지 설정 및 디자인 CSS
@@ -52,13 +55,35 @@ st.markdown("""
 }
 [data-testid="stAlert"] > div { color: #28302c; }
 [data-testid="stExpander"] details summary { min-height: 50px; color: #173f30; font-weight: 650; }
-.result-card { margin-top: 26px; padding: 26px; border: 1px solid #e5e1d8; border-radius: 14px; background: #ffffff; }
-.result-label { color: #9a7a3d; font-size: 13px; font-weight: 700; }
-.result-title { margin: 7px 0 8px; color: #12291f; font-size: 24px; font-weight: 700; }
-.result-summary { margin: 0; color: #606762; font-size: 15px; line-height: 1.65; }
-.result-details { margin-top: 14px; color: #4f5752; font-size: 14px; line-height: 1.7; }
-.result-details summary { color: #173f30; cursor: pointer; font-weight: 650; }
-.result-details p { margin: 12px 0 0; }
+[data-testid="stDownloadButton"] { margin-top: 12px; }
+[data-testid="stDownloadButton"] button {
+    min-height: 52px; border: 1px solid #173f30; border-radius: 12px;
+    background: #ffffff; color: #173f30; font-size: 15px; font-weight: 700;
+}
+[data-testid="stDownloadButton"] button:hover,
+[data-testid="stDownloadButton"] button:focus { border-color: #123326; background: #f6f7f4; color: #123326; }
+.result-card { margin-top: 26px; border: 1px solid #e5e1d8; border-radius: 14px; background: #ffffff; overflow: hidden; }
+.result-hero { padding: 27px 26px 24px; background: #f7f6f1; }
+.result-eyebrow { color: #68716c; font-size: 14px; font-weight: 650; }
+.result-eyebrow span { margin-left: 5px; color: #8b764a; }
+.result-pick { margin-top: 7px; color: #9a7a3d; font-size: 30px; font-weight: 780; line-height: 1.25; letter-spacing: -.03em; }
+.result-recommendation { margin-top: 5px; color: #12291f; font-size: 18px; font-weight: 700; line-height: 1.45; }
+.result-body { padding: 18px 26px 24px; }
+.result-priority { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; }
+.result-priority-item { min-height: 106px; padding: 17px 18px; border-radius: 11px; background: #f6f7f4; }
+.result-priority-label { color: #56615b; font-size: 13px; font-weight: 700; line-height: 1.5; }
+.result-priority-value { margin-top: 7px; color: #173f30; font-size: 17px; font-weight: 720; line-height: 1.5; }
+.result-market-note { margin-top: 7px; color: #8b764a; font-size: 16px; font-weight: 720; line-height: 1.5; }
+.result-market-list { margin: 8px 0 0; padding-left: 20px; color: #173f30; font-size: 15px; font-weight: 700; line-height: 1.7; }
+.result-market-footnote { margin-top: 8px; color: #7a817d; font-size: 12px; font-weight: 500; line-height: 1.5; }
+.result-supporting { margin-top: 18px; }
+.result-support-row { display: grid; grid-template-columns: 100px 1fr; gap: 16px; padding: 10px 0; }
+.result-support-row + .result-support-row { border-top: 1px solid #f0f1ee; }
+.result-support-label { color: #7a817d; font-size: 13px; font-weight: 650; line-height: 1.6; }
+.result-support-value { color: #535c57; font-size: 14px; font-weight: 500; line-height: 1.65; }
+.result-stock { color: #747b77; font-weight: 650; }
+.result-kakao { display: flex; align-items: center; justify-content: center; min-height: 52px; margin-top: 18px; border-radius: 12px; background: #d5ad55; color: #171a18 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; }
+.result-kakao:hover, .result-kakao:focus { background: #caa044; }
 .market-container { margin-top: 16px; }
 .market-cta {
     display: flex; align-items: center; justify-content: center; min-height: 50px;
@@ -81,7 +106,20 @@ st.markdown("""
     [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; }
     [data-testid="stTextInput"] input { min-height: 64px; padding: 0 20px; font-size: 17px; }
     [data-testid="stHorizontalBlock"] [data-testid="stButton"] button { min-height: 52px; }
-    .result-card { padding: 22px 18px; }
+    .result-card { margin-top: 22px; }
+    .result-hero { padding: 23px 20px 21px; }
+    .result-pick { font-size: 27px; }
+    .result-recommendation { font-size: 17px; }
+    .result-body { padding: 16px 20px 21px; }
+    .result-priority { grid-template-columns: 1fr; gap: 8px; }
+    .result-priority-item { min-height: auto; padding: 15px 16px; }
+    .result-priority-label { font-size: 14px; }
+    .result-priority-value, .result-market-note { margin-top: 5px; font-size: 16px; }
+    .result-supporting { margin-top: 13px; }
+    .result-support-row { grid-template-columns: 82px 1fr; gap: 12px; padding: 9px 0; }
+    .result-support-label { font-size: 14px; }
+    .result-support-value { font-size: 15px; line-height: 1.6; }
+    .result-kakao { min-height: 54px; margin-top: 15px; font-size: 16px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -372,62 +410,6 @@ expert_db = {
 }
 }
 
-# =================================================================
-# [추가된 API 함수] 삼겹살 가격 자동 연동
-# =================================================================
-def get_realtime_cheapest_price():
-    try:
-        import requests
-
-        url = "https://gw.ekcm.co.kr/api/goods/v1/goods/goodsList"
-
-        params = [
-            ("goodsNoList", "26899132"),
-            ("goodsNoList", "26885345"),
-            ("goodsNoList", "26885346"),
-            ("aplyPsbMediaCd", "01")
-        ]
-
-        response = requests.get(url, params=params)
-        data = response.json()
-
-        items = (
-            data.get("payload", [])
-            or data.get("goodsList", [])
-            or data.get("data", {}).get("goodsList", [])
-            or []
-        )
-
-        def get_price(x):
-            for key in ["sellPrc", "goodsPrc", "stdCprc", "supPcost", "salePrc"]:
-                val = x.get(key)
-                if val:
-                    return val
-            return 0
-
-        valid_items = [i for i in items if get_price(i) > 0]
-
-        if not valid_items:
-            return {"payload": []}
-
-        cheapest = min(valid_items, key=get_price)
-
-        return {
-            "payload": valid_items,
-            "cheapest": {
-                "name": cheapest.get("goodsName", "상품명 없음"),
-                "price": get_price(cheapest),
-                "weight": cheapest.get("stdWt", 1),
-                "origin": cheapest.get("originNm", "정보없음")
-            }
-        }
-
-    except Exception as e:
-        return {
-            "payload": [],
-            "error": str(e)
-        }
-
 # 2. 검색 및 출력 제어 로직
 st.markdown("""
 <section class="hero-copy">
@@ -458,55 +440,77 @@ if search_query:
 
     if matched_key:
         data = expert_db[matched_key]
-
-        other_parts_html = "".join(
-            f"<p><strong>{part}</strong><br>{desc}</p>"
-            for part, desc in data['other_parts'].items()
+        card_data = get_card_data(matched_key)
+        market_data = get_geumcheon_market_data(matched_key)
+        market_message = (
+            "실시간 시세 연동 예정"
+            if market_data["market_price"] == "준비중"
+            else market_data["market_price"]
         )
+        stock_message = (
+            "확인 예정"
+            if market_data["stock_status"] == "준비중"
+            else market_data["stock_status"]
+        )
+        market_products = market_data.get("products", [])
+        if market_products:
+            market_items_html = "".join(
+                f"<li>{escape(product['label'])} — {product['kg_price']:,.0f}원/kg</li>"
+                for product in market_products
+            )
+            market_content_html = (
+                f'<ol class="result-market-list">{market_items_html}</ol>'
+                '<div class="result-market-footnote">'
+                '금천미트 실시간 조회 · 가격 및 재고는 변동될 수 있습니다.'
+                '</div>'
+            )
+        else:
+            market_content_html = f'<div class="result-market-note">{escape(market_message)}</div>'
         st.markdown(f"""
         <div class="result-card">
-            <div class="result-label">{matched_key} 추천 원육</div>
-            <div class="result-title">{data['pro_pick']}</div>
-            <p class="result-summary">{data['summary']}</p>
-            <details class="result-details">
-                <summary>상세 가이드 보기</summary>
-                <p>{data['pro_reason']}</p>
-                {other_parts_html}
-                <p><strong>실무 팁</strong><br>{data['pro_tip']}</p>
-            </details>
+            <div class="result-hero">
+                <div class="result-eyebrow">이 메뉴에는 <span>추천 원육</span></div>
+                <div class="result-pick">{data['pro_pick']}</div>
+                <div class="result-recommendation">가장 적합한 원육으로 추천합니다.</div>
+            </div>
+            <div class="result-body">
+                <div class="result-priority">
+                    <div class="result-priority-item">
+                        <div class="result-priority-label">추천 규격</div>
+                        <div class="result-priority-value">{card_data['specification']}</div>
+                    </div>
+                    <div class="result-priority-item">
+                        <div class="result-priority-label">실시간 금천미트 시세</div>
+                        {market_content_html}
+                    </div>
+                </div>
+                <div class="result-supporting">
+                    <div class="result-support-row">
+                        <div class="result-support-label">원산지</div>
+                        <div class="result-support-value">{card_data['origin']}</div>
+                    </div>
+                    <div class="result-support-row">
+                        <div class="result-support-label">선택 이유</div>
+                        <div class="result-support-value">{data['pro_reason']}</div>
+                    </div>
+                    <div class="result-support-row">
+                        <div class="result-support-label">재고 상태</div>
+                        <div class="result-support-value result-stock">{stock_message}</div>
+                    </div>
+                </div>
+                <a class="result-kakao" href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer">1:1 카카오톡 상담</a>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-
-        # 🔥 삼겹살 API 부분
-        if matched_key == "삼겹살":
-            api_data = get_realtime_cheapest_price()
-            st.markdown("### 금천미트 대표 상품")
-
-            items = api_data.get("payload", [])
-
-            def get_price(x):
-                for key in ["sellPrc", "goodsPrc", "stdCprc", "supPcost", "salePrc"]:
-                    val = x.get(key)
-                    if val:
-                        return val
-                return 0
-
-            if items:
-                for item in items:
-                    price = get_price(item)
-                    weight = item.get("stdWt", 1)
-
-                    kg_price = round(price / weight, 0) if weight else 0
-
-                    st.success(f"""
-상품명: {item.get('goodsName', '-')}
-kg당 가격: {kg_price:,}원
-중량: {weight}kg
-총가격: {price:,}원
-원산지: {item.get('originNm', '-')}
-""")
-            else:
-                st.warning("현재 금천미트 대표 상품 정보를 불러올 수 없습니다.")
+        if market_products:
+            price_card_png = create_price_card_png(matched_key, market_products)
+            st.download_button(
+                "이미지 저장 (PNG)",
+                data=price_card_png,
+                file_name=f"도토리다판다_{matched_key}_실시간_단가표.png",
+                mime="image/png",
+                use_container_width=True,
+            )
     else:
         st.error("해당 메뉴는 연구소에 없습니다.")
 
