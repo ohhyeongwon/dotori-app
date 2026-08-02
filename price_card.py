@@ -10,8 +10,28 @@ from PIL import Image, ImageDraw, ImageFont
 
 WIDTH = 1080
 HEIGHT = 1350
-FONT_REGULAR = Path(r"C:\Windows\Fonts\malgun.ttf")
-FONT_BOLD = Path(r"C:\Windows\Fonts\malgunbd.ttf")
+
+
+def _first_available_font(*candidates):
+    for candidate in candidates:
+        path = Path(candidate)
+        if path.exists():
+            return path
+    raise RuntimeError("PNG 생성에 사용할 한글 글꼴을 찾을 수 없습니다.")
+
+
+FONT_REGULAR = _first_available_font(
+    r"C:\Windows\Fonts\malgun.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKkr-Regular.otf",
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+)
+FONT_BOLD = _first_available_font(
+    r"C:\Windows\Fonts\malgunbd.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKkr-Bold.otf",
+    "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+)
 
 
 def _font(size, bold=False):
