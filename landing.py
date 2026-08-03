@@ -1,8 +1,14 @@
 import streamlit as st
 from html import escape
 
-from menu_data import get_card_data, get_geumcheon_market_data
-from price_card import create_price_card_png
+from menu_data import (
+    KAKAO_CHAT_URL,
+    TODAY_MARKET_CATEGORIES,
+    get_card_data,
+    get_geumcheon_market_data,
+    get_today_market_report,
+)
+from price_card import CATEGORY_REPORT_SIZE, create_market_report_png, create_price_card_png
 
 # =================================================================
 # 1. 페이지 설정 및 디자인 CSS
@@ -17,8 +23,12 @@ st.markdown("""
     font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
                  "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
-.stApp { background: #ffffff; color: #171a18; }
-.block-container { max-width: 760px; padding-top: 1.1rem; padding-bottom: 5rem; }
+.stApp { background: #ffffff; color: #171a18; overflow-x: clip; }
+.stApp *, .stApp *::before, .stApp *::after { box-sizing: border-box; }
+.block-container {
+    width: 100%; max-width: 760px; min-width: 0; margin-left: auto; margin-right: auto;
+    padding-top: 1.1rem; padding-bottom: 5rem;
+}
 .hero-copy { margin-top: 108px; margin-bottom: 24px; text-align: center; }
 .hero-title {
     margin: 0; color: #12291f; font-size: 26px !important; font-weight: 750 !important;
@@ -29,6 +39,24 @@ st.markdown("""
     line-height: 1.65; letter-spacing: -0.01em;
 }
 .hero-mobile-break { display: none; }
+.today-market { margin: 30px 0 16px; }
+.today-market-heading { margin-bottom: 18px; text-align: center; }
+.today-market-title { margin: 0; color: #12291f; font-size: 23px !important; font-weight: 780 !important; line-height: 1.35 !important; letter-spacing: -.025em; }
+.today-market-caption { margin: 7px auto 0; max-width: 540px; color: #747c77; font-size: 14px !important; line-height: 1.6 !important; }
+.hero-copy, .today-market-heading, .search-section-label,
+.st-key-today_market_controls, [data-testid="stHorizontalBlock"],
+[data-testid="column"], [data-testid="stTextInput"], [data-testid="stButton"] {
+    min-width: 0;
+}
+.hero-title, .hero-description, .today-market-title, .today-market-caption {
+    max-width: 100%; overflow-wrap: anywhere;
+}
+.st-key-today_market_controls [data-testid="stButton"] button { min-height: 48px; border-radius: 11px; font-size: 14px; font-weight: 700; }
+.st-key-today_market_overall button { min-height: 58px !important; border-color: #173f30 !important; background: #173f30 !important; color: #ffffff !important; font-size: 16px !important; }
+.st-key-today_market_toggle button { min-height: 52px !important; border-color: #b9c6bf !important; background: #ffffff !important; color: #173f30 !important; }
+.st-key-today_market_controls [data-testid="stImage"] { margin-top: 18px; border: 1px solid #e3ded2; border-radius: 14px; overflow: hidden; }
+.today-market-selection { margin: 18px 0 8px; color: #173f30; font-size: 15px; font-weight: 750; text-align: center; }
+.search-section-label { margin: 2px 0 12px; color: #68716c; font-size: 13px; font-weight: 700; }
 [data-testid="stTextInput"] { margin: 0; }
 [data-testid="stTextInput"] input {
     min-height: 72px; padding: 0 26px; border: 1px solid #d9dedb;
@@ -97,13 +125,28 @@ st.markdown("""
     width: 100%; background: #d5ad55; color: #171a18 !important; font-size: 15px; box-shadow: none;
 }
 @media (max-width: 700px) {
-    .block-container { padding: 0.35rem 16px 1.5rem; }
+    html, body, .stApp { max-width: 100%; overflow-x: hidden; }
+    .block-container {
+        width: 100% !important; max-width: 100% !important; min-width: 0 !important;
+        margin: 0 auto !important; padding: 0.35rem 16px 1.5rem !important;
+    }
     .hero-copy { margin-top: 42px; margin-bottom: 20px; }
-    .hero-title { font-size: 27px !important; line-height: 1.35 !important; }
+    .hero-title { font-size: 27px !important; line-height: 1.35 !important; word-break: keep-all; }
     .hero-mobile-break { display: block; }
-    .hero-description { margin-top: 12px; font-size: 15px; line-height: 1.6; }
-    [data-testid="stHorizontalBlock"] { flex-direction: column; gap: 10px; }
-    [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; }
+    .hero-description { margin-top: 12px; font-size: 15px !important; line-height: 1.6 !important; word-break: keep-all; }
+    .today-market { margin: 26px 0 14px; }
+    .today-market-heading { margin-bottom: 15px; }
+    .today-market-title { font-size: 22px !important; line-height: 1.4 !important; word-break: keep-all; }
+    .today-market-caption { font-size: 13px !important; line-height: 1.6 !important; word-break: keep-all; }
+    .search-section-label { margin-top: 4px; }
+    [data-testid="stHorizontalBlock"] { width: 100% !important; flex-direction: column; gap: 10px; }
+    [data-testid="column"] { width: 100% !important; min-width: 0 !important; flex: 1 1 100% !important; }
+    .st-key-today_market_controls [data-testid="stHorizontalBlock"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .st-key-today_market_controls [data-testid="column"] { width: auto !important; min-width: 0 !important; }
+    .st-key-today_market_controls [data-testid="stButton"] button { min-height: 48px; padding-left: 8px; padding-right: 8px; font-size: 13px; }
+    [data-testid="stTextInput"], [data-testid="stTextInput"] > div,
+    [data-testid="stTextInput"] input, [data-testid="stButton"],
+    [data-testid="stButton"] button { width: 100% !important; max-width: 100% !important; }
     [data-testid="stTextInput"] input { min-height: 64px; padding: 0 20px; font-size: 17px; }
     [data-testid="stHorizontalBlock"] [data-testid="stButton"] button { min-height: 52px; }
     .result-card { margin-top: 22px; }
@@ -417,6 +460,121 @@ st.markdown("""
     <p class="hero-description">메뉴를 검색하면<br>추천 원육과 선택 이유를 확인할 수 있습니다.</p>
 </section>
 """, unsafe_allow_html=True)
+
+if "today_market_selection" not in st.session_state:
+    st.session_state.today_market_selection = None
+if "today_market_categories_expanded" not in st.session_state:
+    st.session_state.today_market_categories_expanded = False
+
+
+def select_today_market(report_id):
+    st.session_state.today_market_selection = report_id
+
+
+def close_today_market():
+    st.session_state.today_market_selection = None
+
+
+def toggle_today_market_categories():
+    st.session_state.today_market_categories_expanded = (
+        not st.session_state.today_market_categories_expanded
+    )
+
+
+with st.container(key="today_market_controls"):
+    st.markdown(
+        """
+        <section class="today-market" aria-labelledby="today-market-title">
+            <div class="today-market-heading">
+                <h2 id="today-market-title" class="today-market-title">오늘의 축산물 실시간 단가</h2>
+                <p class="today-market-caption">주요 축산물의 현재 시세를 한 장의 단가표로 확인하세요.</p>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.button(
+        "오늘의 종합 단가표 보기",
+        key="today_market_overall",
+        use_container_width=True,
+        type="primary",
+        on_click=select_today_market,
+        args=("all",),
+    )
+    toggle_label = (
+        "품목별 단가표 접기"
+        if st.session_state.today_market_categories_expanded
+        else "품목별 단가표 보기"
+    )
+    st.button(
+        toggle_label,
+        key="today_market_toggle",
+        use_container_width=True,
+        on_click=toggle_today_market_categories,
+    )
+
+    if st.session_state.today_market_categories_expanded:
+        first_row = st.columns(4, gap="small")
+        second_row = st.columns(3, gap="small")
+        for index, category in enumerate(TODAY_MARKET_CATEGORIES):
+            target_column = first_row[index] if index < 4 else second_row[index - 4]
+            with target_column:
+                st.button(
+                    category["category_name"],
+                    key=f'today_market_category_{category["category_id"]}',
+                    use_container_width=True,
+                    on_click=select_today_market,
+                    args=(category["category_id"],),
+                )
+
+    selected_report_id = st.session_state.today_market_selection
+    if selected_report_id:
+        selected_report = get_today_market_report(
+            None if selected_report_id == "all" else selected_report_id,
+            include_live_prices=True,
+        )
+        is_overall_report = selected_report_id == "all"
+        report_size = None if is_overall_report else CATEGORY_REPORT_SIZE
+        report_png = (
+            create_market_report_png(
+                selected_report["title"], selected_report["groups"],
+                kakao_chat_url=KAKAO_CHAT_URL,
+            )
+            if report_size is None
+            else create_market_report_png(
+                selected_report["title"], selected_report["groups"],
+                canvas_size=report_size, kakao_chat_url=KAKAO_CHAT_URL,
+            )
+        )
+        st.markdown(
+            f'<div class="today-market-selection">{escape(selected_report["title"])}</div>',
+            unsafe_allow_html=True,
+        )
+        st.image(report_png, use_container_width=True)
+        safe_name = (
+            "오늘의_축산물" if is_overall_report
+            else selected_report["groups"][0]["category_name"].replace(" ", "_")
+        )
+        download_label = (
+            "종합 단가표 저장(PNG)" if is_overall_report
+            else f'{selected_report["groups"][0]["category_name"]} 단가표 저장(PNG)'
+        )
+        st.download_button(
+            download_label,
+            data=report_png,
+            file_name=f"동원_금천미트_{safe_name}_실시간_단가.png",
+            mime="image/png",
+            use_container_width=True,
+            key="today_market_download",
+        )
+        st.button(
+            "단가표 닫기",
+            key="today_market_close",
+            use_container_width=True,
+            on_click=close_today_market,
+        )
+
+st.markdown('<div class="search-section-label">메뉴별 추천 원육 검색</div>', unsafe_allow_html=True)
 
 search_input, search_action = st.columns([5, 1.25], gap="small")
 with search_input:
