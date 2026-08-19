@@ -3,7 +3,6 @@ from html import escape
 
 from menu_data import (
     KAKAO_CHAT_URL,
-    TODAY_MARKET_CATEGORIES,
     get_card_data,
     get_geumcheon_market_data,
     get_today_market_report,
@@ -56,7 +55,7 @@ st.markdown("""
 .st-key-today_market_toggle button { min-height: 52px !important; border-color: #b9c6bf !important; background: #ffffff !important; color: #173f30 !important; }
 .st-key-today_market_controls [data-testid="stImage"] { margin-top: 18px; border: 1px solid #e3ded2; border-radius: 14px; overflow: hidden; }
 .today-market-selection { margin: 18px 0 8px; color: #173f30; font-size: 15px; font-weight: 750; text-align: center; }
-.search-section-label { margin: 2px 0 12px; color: #68716c; font-size: 13px; font-weight: 700; }
+.search-section-label { margin: 2px 0 12px; color: #68716c; font-size: 13px; font-weight: 700; text-align: center; }
 [data-testid="stTextInput"] { margin: 0; }
 [data-testid="stTextInput"] input {
     min-height: 72px; padding: 0 26px; border: 1px solid #d9dedb;
@@ -454,17 +453,8 @@ expert_db = {
 }
 
 # 2. 검색 및 출력 제어 로직
-st.markdown("""
-<section class="hero-copy">
-    <h1 class="hero-title">메뉴에 맞는 원육을<br class="hero-mobile-break"> 찾아보세요</h1>
-    <p class="hero-description">메뉴를 검색하면<br>추천 원육과 선택 이유를 확인할 수 있습니다.</p>
-</section>
-""", unsafe_allow_html=True)
-
 if "today_market_selection" not in st.session_state:
     st.session_state.today_market_selection = None
-if "today_market_categories_expanded" not in st.session_state:
-    st.session_state.today_market_categories_expanded = False
 
 
 def select_today_market(report_id):
@@ -475,19 +465,12 @@ def close_today_market():
     st.session_state.today_market_selection = None
 
 
-def toggle_today_market_categories():
-    st.session_state.today_market_categories_expanded = (
-        not st.session_state.today_market_categories_expanded
-    )
-
-
 with st.container(key="today_market_controls"):
     st.markdown(
         """
         <section class="today-market" aria-labelledby="today-market-title">
             <div class="today-market-heading">
                 <h2 id="today-market-title" class="today-market-title">오늘의 축산물 실시간 단가</h2>
-                <p class="today-market-caption">주요 축산물의 현재 시세를 한 장의 단가표로 확인하세요.</p>
             </div>
         </section>
         """,
@@ -501,32 +484,6 @@ with st.container(key="today_market_controls"):
         on_click=select_today_market,
         args=("all",),
     )
-    toggle_label = (
-        "품목별 단가표 접기"
-        if st.session_state.today_market_categories_expanded
-        else "품목별 단가표 보기"
-    )
-    st.button(
-        toggle_label,
-        key="today_market_toggle",
-        use_container_width=True,
-        on_click=toggle_today_market_categories,
-    )
-
-    if st.session_state.today_market_categories_expanded:
-        first_row = st.columns(4, gap="small")
-        second_row = st.columns(3, gap="small")
-        for index, category in enumerate(TODAY_MARKET_CATEGORIES):
-            target_column = first_row[index] if index < 4 else second_row[index - 4]
-            with target_column:
-                st.button(
-                    category["category_name"],
-                    key=f'today_market_category_{category["category_id"]}',
-                    use_container_width=True,
-                    on_click=select_today_market,
-                    args=(category["category_id"],),
-                )
-
     selected_report_id = st.session_state.today_market_selection
     if selected_report_id:
         selected_report = get_today_market_report(
@@ -730,7 +687,7 @@ body {
 <div class="signup-card">
     <div class="signup-eyebrow">금천미트 가입</div>
     <div class="signup-name">권오현</div>
-    <p class="signup-benefit">가입할 때 ‘영업사원 소개’에 입력하면<br>메뉴와 원육 상담을 빠르게 받을 수 있습니다.</p>
+    <p class="signup-benefit">가입 시 추천인 입력하면 각종 혜택을 안내받을 수 있습니다.</p>
     <button class="signup-cta" type="button">추천인 복사</button>
     <p class="copy-status" role="status" aria-live="polite"></p>
 </div>
@@ -802,7 +759,7 @@ button.addEventListener('click', async () => {
 
 st.markdown("""
 <div class='market-container'>
-    <a class='market-cta' href='https://www.ekcm.co.kr/' target='_blank'>축산물 도매시세 보기</a>
+    <a class='market-cta' href='https://www.ekcm.co.kr/' target='_blank'>동원 금천미트 공식몰</a>
 </div>
 """, unsafe_allow_html=True)
 
