@@ -1,5 +1,7 @@
 import streamlit as st
 from html import escape
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from menu_data import (
     KAKAO_CHAT_URL,
@@ -466,68 +468,107 @@ def close_today_market():
     st.session_state.today_market_selection = None
 
 
-with st.container(key="today_market_controls"):
-    st.markdown(
-        """
-        <section class="today-market" aria-labelledby="today-market-title">
-            <div class="today-market-heading">
-                <h2 id="today-market-title" class="today-market-title">실시간 축산 도매 시세표</h2>
-                <p class="today-market-caption">주요 축산물의 현재 도매 단가를 한눈에 확인하세요.</p>
-            </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
+@st.cache_data(ttl=300, max_entries=16, show_spinner=False)
+def cached_a4_report_png(groups, report_day):
+    # 가격 캐시와 같은 5분 수명. 날짜도 키에 포함해 자정 이후 전날 이미지를 재사용하지 않는다.
+    return create_market_report_png(
+        "실시간 축산 도매 시세표", groups,
+        queried_at=datetime.fromisoformat(report_day),
+        canvas_size=OVERALL_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
     )
-    st.button(
-        "오늘 시세표 보기",
-        key="today_market_overall",
-        use_container_width=True,
-        type="primary",
-        on_click=select_today_market,
-        args=("all",),
-    )
-    selected_report_id = st.session_state.today_market_selection
-    if selected_report_id:
-        selected_report = get_today_market_report(
-            None if selected_report_id == "all" else selected_report_id,
-            include_live_prices=True,
-        )
-        is_overall_report = selected_report_id == "all"
-        report_title = "실시간 축산 도매 시세표" if is_overall_report else selected_report["title"]
-        report_size = OVERALL_REPORT_SIZE if is_overall_report else CATEGORY_REPORT_SIZE
-        report_png = create_market_report_png(
-            report_title, selected_report["groups"],
-            queried_at=selected_report.get("queried_at"),
-            canvas_size=report_size, kakao_chat_url=KAKAO_CHAT_URL,
-        )
+
+
+@st.fragment
+def render_today_market():
+    with st.container(key="today_market_controls"):
         st.markdown(
-            f'<div class="today-market-selection">{escape(report_title)}</div>',
+            """
+            <section class="today-market" aria-labelledby="today-market-title">
+                <div class="today-market-heading">
+                    <h2 id="today-market-title" class="today-market-title">실시간 축산 도매 시세표</h2>
+                    <p class="today-market-caption">주요 축산물의 현재 도매 단가를 한눈에 확인하세요.</p>
+                </div>
+            </section>
+            """,
             unsafe_allow_html=True,
         )
-        st.image(report_png, use_container_width=True)
-        safe_name = (
-            "축산_도매_시세표_A4" if is_overall_report
-            else selected_report["groups"][0]["category_name"].replace(" ", "_")
-        )
-        download_label = (
-            "PNG 저장" if is_overall_report
-            else f'{selected_report["groups"][0]["category_name"]} 단가표 저장(PNG)'
-        )
-        st.download_button(
-            download_label,
-            data=report_png,
-            file_name=f"동원_금천미트_{safe_name}_실시간_단가.png",
-            mime="image/png",
-            use_container_width=True,
-            key="today_market_download",
-            on_click="ignore",
-        )
         st.button(
-            "단가표 닫기",
-            key="today_market_close",
+            "오늘 시세표 보기",
+            key="today_market_overall",
             use_container_width=True,
-            on_click=close_today_market,
+            type="primary",
+            on_click=select_today_market,
+            args=("all",),
         )
+        selected_report_id = st.session_state.today_market_selection
+        if selected_report_id:
+            loading = st.empty()
+            try:
+                with loading.container():
+                    with st.status("실시간 시세표를 불러오고 있습니다...", expanded=False):
+                        selected_report = get_today_market_report(
+                            None if selected_report_id == "all" else selected_report_id,
+                            include_live_prices=True,
+                        )
+                        is_overall_report = selected_report_id == "all"
+                        report_title = "실시간 축산 도매 시세표" if is_overall_report else selected_report["title"]
+                        if is_overall_report:
+                            # 조회 시각/상품 메타데이터는 매번 달라도 표시 내용이 같으면 재사용한다.
+                            render_groups = [
+                                {
+                                    "category_id": group["category_id"],
+                                    "category_name": group["category_name"],
+                                    "items": [
+                                        {key: item.get(key) for key in (
+                                            "item_id", "item_name", "storage_status", "kg_price"
+                                        )}
+                                        for item in group["items"]
+                                    ],
+                                }
+                                for group in selected_report["groups"]
+                            ]
+                            report_png = cached_a4_report_png(
+                                render_groups, datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+                            )
+                        else:
+                            report_png = create_market_report_png(
+                                report_title, selected_report["groups"],
+                                queried_at=selected_report.get("queried_at"),
+                                canvas_size=CATEGORY_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
+                            )
+            finally:
+                loading.empty()
+            st.markdown(
+                f'<div class="today-market-selection">{escape(report_title)}</div>',
+                unsafe_allow_html=True,
+            )
+            st.image(report_png, use_container_width=True)
+            safe_name = (
+                "축산_도매_시세표_A4" if is_overall_report
+                else selected_report["groups"][0]["category_name"].replace(" ", "_")
+            )
+            download_label = (
+                "PNG 저장" if is_overall_report
+                else f'{selected_report["groups"][0]["category_name"]} 단가표 저장(PNG)'
+            )
+            st.download_button(
+                download_label,
+                data=report_png,
+                file_name=f"동원_금천미트_{safe_name}_실시간_단가.png",
+                mime="image/png",
+                use_container_width=True,
+                key="today_market_download",
+                on_click="ignore",
+            )
+            st.button(
+                "단가표 닫기",
+                key="today_market_close",
+                use_container_width=True,
+                on_click=close_today_market,
+            )
+
+
+render_today_market()
 
 st.markdown('<div class="search-section-label">메뉴별 추천 원육 검색</div>', unsafe_allow_html=True)
 
