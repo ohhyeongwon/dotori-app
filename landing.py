@@ -7,7 +7,7 @@ from menu_data import (
     get_geumcheon_market_data,
     get_today_market_report,
 )
-from price_card import CATEGORY_REPORT_SIZE, create_market_report_png, create_price_card_png
+from price_card import OVERALL_REPORT_SIZE, CATEGORY_REPORT_SIZE, create_market_report_png, create_price_card_png
 
 # =================================================================
 # 1. 페이지 설정 및 디자인 CSS
@@ -54,6 +54,7 @@ st.markdown("""
 .st-key-today_market_overall button { min-height: 58px !important; border-color: #173f30 !important; background: #173f30 !important; color: #ffffff !important; font-size: 16px !important; }
 .st-key-today_market_toggle button { min-height: 52px !important; border-color: #b9c6bf !important; background: #ffffff !important; color: #173f30 !important; }
 .st-key-today_market_controls [data-testid="stImage"] { margin-top: 18px; border: 1px solid #e3ded2; border-radius: 14px; overflow: hidden; }
+.st-key-today_market_controls [data-testid="stImage"] img { display: block; max-width: 100%; height: auto; }
 .today-market-selection { margin: 18px 0 8px; color: #173f30; font-size: 15px; font-weight: 750; text-align: center; }
 .search-section-label { margin: 2px 0 12px; color: #68716c; font-size: 13px; font-weight: 700; text-align: center; }
 [data-testid="stTextInput"] { margin: 0; }
@@ -470,14 +471,15 @@ with st.container(key="today_market_controls"):
         """
         <section class="today-market" aria-labelledby="today-market-title">
             <div class="today-market-heading">
-                <h2 id="today-market-title" class="today-market-title">오늘의 축산물 실시간 단가</h2>
+                <h2 id="today-market-title" class="today-market-title">실시간 축산 도매 시세표</h2>
+                <p class="today-market-caption">주요 축산물의 현재 도매 단가를 한눈에 확인하세요.</p>
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
     st.button(
-        "오늘의 종합 단가표 보기",
+        "오늘 시세표 보기",
         key="today_market_overall",
         use_container_width=True,
         type="primary",
@@ -491,29 +493,24 @@ with st.container(key="today_market_controls"):
             include_live_prices=True,
         )
         is_overall_report = selected_report_id == "all"
-        report_size = None if is_overall_report else CATEGORY_REPORT_SIZE
-        report_png = (
-            create_market_report_png(
-                selected_report["title"], selected_report["groups"],
-                kakao_chat_url=KAKAO_CHAT_URL,
-            )
-            if report_size is None
-            else create_market_report_png(
-                selected_report["title"], selected_report["groups"],
-                canvas_size=report_size, kakao_chat_url=KAKAO_CHAT_URL,
-            )
+        report_title = "실시간 축산 도매 시세표" if is_overall_report else selected_report["title"]
+        report_size = OVERALL_REPORT_SIZE if is_overall_report else CATEGORY_REPORT_SIZE
+        report_png = create_market_report_png(
+            report_title, selected_report["groups"],
+            queried_at=selected_report.get("queried_at"),
+            canvas_size=report_size, kakao_chat_url=KAKAO_CHAT_URL,
         )
         st.markdown(
-            f'<div class="today-market-selection">{escape(selected_report["title"])}</div>',
+            f'<div class="today-market-selection">{escape(report_title)}</div>',
             unsafe_allow_html=True,
         )
         st.image(report_png, use_container_width=True)
         safe_name = (
-            "오늘의_축산물" if is_overall_report
+            "축산_도매_시세표_A4" if is_overall_report
             else selected_report["groups"][0]["category_name"].replace(" ", "_")
         )
         download_label = (
-            "종합 단가표 저장(PNG)" if is_overall_report
+            "PNG 저장" if is_overall_report
             else f'{selected_report["groups"][0]["category_name"]} 단가표 저장(PNG)'
         )
         st.download_button(
@@ -523,6 +520,7 @@ with st.container(key="today_market_controls"):
             mime="image/png",
             use_container_width=True,
             key="today_market_download",
+            on_click="ignore",
         )
         st.button(
             "단가표 닫기",

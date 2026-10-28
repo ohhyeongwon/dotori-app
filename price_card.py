@@ -15,7 +15,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 WIDTH = 1080
 HEIGHT = 1350
-OVERALL_REPORT_SIZE = (1440, 2560)
+OVERALL_REPORT_SIZE = (2480, 3508)
 CATEGORY_REPORT_SIZE = (1080, 1350)
 ASSET_DIR = Path(__file__).resolve().parent / "assets"
 DONGWON_LOGO_PATH = ASSET_DIR / "logos" / "dongwon-group-official.png"
@@ -939,97 +939,189 @@ def _draw_reference_marketing_footer(canvas, draw, top, margin, width, height, k
     draw.text((width / 2, disclaimer_y), disclaimer, font=_font(18), fill="#68716b", anchor="mm")
 
 
+def _draw_price_table(draw, group, left, top, width, row_height):
+    """사진·홍보 없이 품목과 kg당 단가를 표시한다."""
+    color = group.get("report_color", "#123c2e")
+    draw.rounded_rectangle((left, top, left + width, top + 64), radius=9, fill=color)
+    draw.text((left + 20, top + 31), group["category_name"], font=_font(32, True), fill="white", anchor="lm")
+    draw.text((left + width - 20, top + 32), "원/kg", font=_font(22), fill="white", anchor="rm")
+    y = top + 72
+    for index, item in enumerate(group["items"]):
+        if index % 2 == 0:
+            draw.rectangle((left, y, left + width, y + row_height), fill="#eef1ed")
+        label = item["item_name"]
+        # 긴 세절 품목도 가격 영역을 침범하지 않도록 두 줄로 표시한다.
+        if "(민찌/다짐육)" in label:
+            label = label.replace("(민찌/다짐육)", "")
+            detail = "민찌 / 다짐육 완제품"
+        else:
+            detail = " · ".join(value for value in [
+                item.get("storage_status", "") if item.get("storage_status", "") not in label else "",
+                (str(item["grade"]) + "등급") if item.get("grade") and group.get("category_id") in {"hanwoo", "beef_cattle"} else "",
+            ] if value)
+        name_width = width - 205
+        font = _fit_text(draw, label, name_width, start_size=30, min_size=23, bold=True)
+        draw.text((left + 17, y + (20 if detail else row_height / 2)), label, font=font, fill="#243b31", anchor="lm")
+        if detail:
+            draw.text((left + 18, y + row_height - 13), detail, font=_font(16), fill="#6e786f", anchor="lm")
+        value = item.get("kg_price")
+        price = f"{value:,.0f}" if value is not None else ("미연결" if item["lookup"].get("method") is None else "조회 불가") if "lookup" in item else "조회 불가"
+        draw.text((left + width - 17, y + row_height / 2 - 1), price,
+                  font=_font(37 if value is not None else 25, True),
+                  fill="#123c2e" if value is not None else "#8b918b", anchor="rm")
+        draw.line((left, y + row_height, left + width, y + row_height), fill="#dce1da", width=1)
+        y += row_height
+    return y
+
+
+@lru_cache(maxsize=64)
+def _a4_font(size, bold=False):
+    """인쇄용 Noto Sans KR. 미설치 환경은 기존 한글 고딕을 사용한다."""
+    path = Path(r"C:\Windows\Fonts\NotoSansKR-VF.ttf")
+    if not path.exists():
+        return _font(size, bold)
+    font = ImageFont.truetype(str(path), size=size)
+    font.set_variation_by_axes([700 if bold else 500])
+    return font
+
+
+def _create_a4_market_report(title, groups, queried_at):
+    """데이터를 변경하지 않고 A4 300dpi 좌표에서 직접 그린다."""
+    groups = [{**group, "items": [item for item in group["items"]
+                                  if item.get("item_id") != "hanwoo_hanging"]}
+              for group in groups]
+    width, height = OVERALL_REPORT_SIZE
+    canvas = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(canvas)
+    margin, gap = 104, 52
+    ink = "#203b32"
+    header_colors = {
+        "hanwoo": "#694f43", "beef_cattle": "#80704e",
+        "handon": "#996a5d", "imported_beef": "#344960",
+        "imported_pork": "#386b68", "chicken": "#727a50",
+        "sliced_meat": "#704552",
+    }
+    # 원본 로고에서 직접 렌더링해 화면용 미리보기 확대를 피한다.
+    logos = [_load_official_logo(str(path)) for path in (DONGWON_LOGO_PATH, GEUMCHEON_LOGO_PATH)]
+    logo_height = 145
+    sizes = [round(logo.width * logo_height / logo.height) for logo in logos]
+    x = (width - sum(sizes) - 100) / 2
+    for index, (logo, logo_width) in enumerate(zip(logos, sizes)):
+        _paste_contained(canvas, logo, (x, 60, x + logo_width, 60 + logo_height))
+        x += logo_width
+        if index == 0:
+            draw.text((x + 50, 132), "×", font=_font(55), fill=ink, anchor="mm")
+            x += 100
+    title = "실시간 축산 도매 시세표"
+    draw.text((width / 2, 300), title, font=_a4_font(108, True), fill=ink, anchor="mm")
+    draw.text((margin, 408), datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y.%m.%d 기준"),
+              font=_a4_font(38), fill=ink, anchor="lm")
+    draw.text((margin + 420, 408), "시세는 재고 및 입고 상황에 따라 변동될 수 있습니다.",
+              font=_a4_font(31), fill="#69736c", anchor="lm")
+    draw.line((margin, 453, width - margin, 453), fill="#b1a183", width=3)
+    left_ids = {"hanwoo", "imported_pork", "sliced_meat"}
+    columns = [[g for g in groups if g.get("category_id") in left_ids],
+               [g for g in groups if g.get("category_id") not in left_ids]]
+    column_width = (width - margin * 2 - gap) / 2
+    row_height = 82
+    column_heights = [sum(110 + len(g["items"]) * row_height for g in column)
+                      + 22 * max(0, len(column) - 1) for column in columns]
+    target_height = max(column_heights)
+    for column, column_groups in enumerate(columns):
+        left = margin + column * (column_width + gap)
+        right = left + column_width
+        y = 490
+        block_gap = 22 + (target_height - column_heights[column]) / max(1, len(column_groups) - 1)
+        for group_index, group in enumerate(column_groups):
+            draw.rounded_rectangle((left, y, right, y + 100), radius=7,
+                                   fill=header_colors.get(group.get("category_id"), ink))
+            draw.text((left + 26, y + 50), group["category_name"], font=_a4_font(51, True),
+                      fill="white", anchor="lm")
+            draw.text((right - 26, y + 50), "원/kg", font=_a4_font(33), fill="white", anchor="rm")
+            y += 110
+            for index, item in enumerate(group["items"]):
+                if index % 2 == 0:
+                    draw.rectangle((left, y, right, y + row_height), fill="#f5f6f3")
+                label = item["item_name"].replace("(민찌/다짐육)", " 민찌")
+                storage = item.get("storage_status", "")
+                if storage and storage not in label:
+                    label = f"{storage} {label}"
+                for size in range(49, 36, -1):
+                    name_font = _a4_font(size)
+                    if draw.textlength(label, font=name_font) <= column_width - 335:
+                        break
+                value = item.get("kg_price")
+                price = f"{value:,.0f}" if value is not None else "-"
+                price_font = _a4_font(59, True)
+                if draw.textlength(label, font=name_font) + draw.textlength(price, font=price_font) > column_width - 80:
+                    raise ValueError(f"품목명과 가격 표시 영역이 겹칩니다: {label}")
+                draw.text((left + 24, y + row_height / 2), label, font=name_font, fill="#22372c", anchor="lm")
+                draw.text((right - 24, y + row_height / 2), price, font=price_font, fill=ink, anchor="rm")
+                y += row_height
+                draw.line((left, y, right, y), fill="#e2e5df", width=1)
+            if group_index < len(column_groups) - 1:
+                y += block_gap
+        if y > height - 100:
+            raise ValueError("A4 단가표 표시 영역을 초과했습니다.")
+    draw.line((margin, height - 100, width - margin, height - 100), fill="#ccd3c8", width=2)
+    draw.text((margin, height - 58), "사이트 회원가입 시 ‘영업사원 소개’에 권오현 입력 시 세부 상담 매칭",
+              font=_a4_font(31), fill="#526158", anchor="lm")
+    draw.text((width - margin, height - 58), f"총 {sum(len(g['items']) for g in groups)}개 품목",
+              font=_a4_font(32, True), fill=ink, anchor="rm")
+    output = BytesIO()
+    canvas.save(output, format="PNG", dpi=(300, 300), optimize=True)
+    return output.getvalue()
+
+
 def create_market_report_png(
     title, groups, queried_at=None, canvas_size=OVERALL_REPORT_SIZE, kakao_chat_url="",
 ):
-    """제목·카테고리·품목·가격을 받아 공유용 범용 축산 단가표 PNG를 만든다."""
-    queried_at = queried_at or datetime.now(ZoneInfo("Asia/Seoul"))
-    width, height = canvas_size
+    """실제 영업용 텍스트 중심 단가표 한 장을 생성한다."""
     if canvas_size not in (OVERALL_REPORT_SIZE, CATEGORY_REPORT_SIZE):
-        raise ValueError("지원하는 단가표 크기는 1440×2560 또는 1080×1350입니다.")
-
-    canvas = Image.new("RGB", canvas_size, "#f7f8f7")
+        raise ValueError("지원하는 단가표 크기는 2480×3508 또는 1080×1350입니다.")
+    queried_at = queried_at or datetime.now(ZoneInfo("Asia/Seoul"))
+    if queried_at.tzinfo is not None:
+        queried_at = queried_at.astimezone(ZoneInfo("Asia/Seoul"))
+    if canvas_size == OVERALL_REPORT_SIZE:
+        return _create_a4_market_report(title, groups, queried_at)
+    width, height = canvas_size
+    overall = canvas_size == OVERALL_REPORT_SIZE
+    margin = 46 if overall else 54
+    canvas = Image.new("RGB", canvas_size, "#f8f9f5")
     draw = ImageDraw.Draw(canvas)
-    dark_green = "#123c2e"
-    gold = "#a57a2c"
-    ink = "#17231d"
-    muted = "#68716b"
-    scale = width / 1080
-    margin = 28 if canvas_size == OVERALL_REPORT_SIZE else 54
-    if canvas_size != OVERALL_REPORT_SIZE:
-        _draw_paper_texture(draw, height=height, width=width)
-    _draw_official_branding(canvas, draw, margin, scale)
-    title_font = _fit_text(
-        draw, title, width - margin * 2 - 80,
-        start_size=104 if scale > 1 else 66, min_size=78 if scale > 1 else 48, bold=True,
-    )
-    draw.text((width / 2, 128 if scale > 1 else 104), title, font=title_font, fill=dark_green, anchor="ma")
-    draw.text(
-        (width - margin, 35 if scale > 1 else 188), queried_at.strftime("%Y.%m.%d %H:%M 기준"),
-        font=_font(23 if scale > 1 else 21, bold=True), fill=ink, anchor="ra",
-    )
-    draw.text(
-        (width / 2, 260 if scale > 1 else 230), "주요 축산물의 현재 최저가를 한눈에 확인하세요!",
-        font=_font(25 if scale > 1 else 20, bold=True), fill=ink, anchor="ma",
-    )
-    header_line_y = 314 if scale > 1 else 286
-    draw.line((margin, header_line_y, width - margin, header_line_y), fill="#d8cfbc", width=2)
-
-    product_images = _prepare_report_images(groups)
-    if canvas_size == OVERALL_REPORT_SIZE:
-        y = 326
-        gap = 14
-        column_gap = 18
-        card_width = (width - margin * 2 - column_gap) / 2
-        pairs = [(0, 1), (2, 3), (4, 5)]
-        for first_index, second_index in pairs:
-            pair = [groups[index] for index in (first_index, second_index) if index < len(groups)]
-            if not pair:
-                continue
-            item_count = max(len(group["items"]) for group in pair)
-            box_height = 72 + item_count * 152
-            for column, group in enumerate(pair):
-                left = margin + column * (card_width + column_gap)
-                _draw_report_group(
-                    canvas, draw, group, (left, y, left + card_width, y + box_height),
-                    152, product_images, compact=True,
-                )
-            y += box_height + gap
-        for group in groups[6:]:
-            box_height = 72 + 154
-            _draw_report_group(
-                canvas, draw, group, (margin, y, width - margin, y + box_height),
-                100, product_images, compact=True,
-            )
-            y += box_height + gap
-        footer_top = max(y + 10, 1970)
+    _draw_official_branding(canvas, draw, margin, width / 1080)
+    draw.text((width - margin, 58), "DAILY MARKET PRICE", font=_font(21, True), fill="#6d766e", anchor="rm")
+    draw.text((margin, 174 if overall else 145), title,
+              font=_fit_text(draw, title, width - margin * 2, 76 if overall else 55, 40, True),
+              fill="#123c2e", anchor="lm")
+    draw.text((margin, 246 if overall else 205), queried_at.strftime("%Y.%m.%d  %H:%M KST 생성"),
+              font=_font(25 if overall else 21), fill="#5b6c60", anchor="lm")
+    draw.text((width - margin, 246 if overall else 205), "판매 가능한 상품 기준 · 원/kg",
+              font=_font(23 if overall else 19), fill="#5b6c60", anchor="rm")
+    line_y = 284 if overall else 243
+    draw.line((margin, line_y, width - margin, line_y), fill="#a57a2c", width=3)
+    if overall:
+        left_ids = {"hanwoo", "beef_cattle", "handon", "chicken"}
+        columns = [[g for g in groups if g.get("category_id") in left_ids],
+                   [g for g in groups if g.get("category_id") not in left_ids]]
+        gap = 28
+        column_width = (width - margin * 2 - gap) / 2
+        row_height = 60
+        for col, column in enumerate(columns):
+            y = 316
+            for group in column:
+                y = _draw_price_table(draw, group, margin + col * (column_width + gap), y, column_width, row_height) + 22
+            if y > height - 90:
+                raise ValueError("단가표 품목이 표시 영역을 초과했습니다.")
     else:
-        group = groups[0]
-        row_height = 132
-        box_height = (
-            84 + 190 if group.get("category_id") == "sliced_meat"
-            else 84 + len(group["items"]) * row_height
-        )
-        _draw_report_group(
-            canvas, draw, group, (72, 314, 1008, 314 + box_height),
-            row_height, product_images,
-        )
-        draw.text((72, 866), "표시 기준", font=_font(19, bold=True), fill=dark_green)
-        draw.text(
-            (72, 902), "연결된 품목은 원/kg 가격을, 미연결 품목은 연동 상태를 표시합니다.",
-            font=_font(18), fill=muted,
-        )
-        footer_top = 946
-
-    if canvas_size == OVERALL_REPORT_SIZE:
-        _draw_reference_marketing_footer(
-            canvas, draw, footer_top, margin, width, height, kakao_chat_url,
-        )
-    else:
-        _draw_report_footer(
-            canvas, draw, footer_top, margin, width, height, scale, kakao_chat_url,
-        )
-
+        count = sum(len(group["items"]) for group in groups)
+        row_height = min(86, (height - 370 - 94 * len(groups)) // max(count, 1))
+        y = 275
+        for group in groups:
+            y = _draw_price_table(draw, group, margin, y, width - margin * 2, row_height) + 22
+    draw.line((margin, height - 84, width - margin, height - 84), fill="#ccd3c8", width=1)
+    draw.text((margin, height - 48), "생성 시점 조회가 · 주문 시 가격 및 재고 확인", font=_font(21), fill="#6e786f", anchor="lm")
+    draw.text((width - margin, height - 48), f"총 {sum(len(g['items']) for g in groups)}개 품목", font=_font(21, True), fill="#123c2e", anchor="rm")
     output = BytesIO()
     canvas.save(output, format="PNG", optimize=True)
     return output.getvalue()

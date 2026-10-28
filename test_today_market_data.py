@@ -8,10 +8,10 @@ class TodayMarketDataTest(unittest.TestCase):
     def test_category_and_item_order(self):
         self.assertEqual(
             [category["category_name"] for category in TODAY_MARKET_CATEGORIES],
-            ["한우", "육우", "한돈", "수입 소고기", "수입 돼지고기", "닭고기", "세절육"],
+            ["한우", "육우", "한돈", "수입 소고기", "수입 돼지고기", "닭고기", "세절/기타"],
         )
         self.assertEqual(
-            [item["item_name"] for item in TODAY_MARKET_CATEGORIES[0]["items"]],
+            [item["item_name"] for item in TODAY_MARKET_CATEGORIES[0]["items"][:3]],
             ["등심", "차돌박이", "우둔"],
         )
 
@@ -20,11 +20,11 @@ class TodayMarketDataTest(unittest.TestCase):
             "method", "category_no", "goods_no", "search_keyword", "selection_policy",
         }
         items = [item for category in TODAY_MARKET_CATEGORIES for item in category["items"]]
-        self.assertEqual(len(items), 17)
+        self.assertEqual(len(items), 58)
         for item in items:
             self.assertTrue(required.issubset(item["lookup"]))
             self.assertIn(item["lookup"]["method"], {None, "category", "goods", "keyword"})
-            self.assertEqual(item["display_status"], "연동 준비 중")
+            self.assertIn(item["display_status"], {"연동 준비 중", "미연결"})
             self.assertEqual(item["image_url"], "")
             self.assertEqual(item["image_source"], "")
             self.assertEqual(item["image_status"], "미연결")
@@ -85,6 +85,7 @@ class TodayMarketDataTest(unittest.TestCase):
             "products": [
                 {
                     "source_type": "category", "source_id": category_no,
+                    "input_order": index,
                     "kg_price": kg_price, "goods_no": f"verified-{category_no}",
                     "goods_name": "검증 상품", "grade": grade,
                     "brand": "금천한우", "sale_price": kg_price * 10,
@@ -92,11 +93,11 @@ class TodayMarketDataTest(unittest.TestCase):
                     "image_url": f"https://static.ekcm.co.kr/{category_no}.jpg",
                     "image_source": "금천미트 API goodsImgUrl", "image_status": "연결",
                 }
-                for category_no, kg_price, grade, filters in [
+                for index, (category_no, kg_price, grade, filters) in enumerate([
                     ("130102", 60100, "1", {"lsprdGrdNm": "1"}),
                     ("130128", 42900, "3", {"brandNm": "금천한우"}),
                     ("130108", 29900, "2", {}),
-                ]
+                ])
             ],
             "diagnostics": [],
             "queried_at": queried_at,
