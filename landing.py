@@ -136,14 +136,15 @@ st.markdown("""
     html, body, .stApp { max-width: 100%; overflow-x: hidden; }
     .block-container {
         width: 100% !important; max-width: 100% !important; min-width: 0 !important;
-        margin: 0 auto !important; padding: 0.35rem 16px 1.5rem !important;
+        margin: 0 auto !important; padding: 0.35rem 16px 0.75rem !important;
     }
+    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { overscroll-behavior-y: none; }
     .hero-copy { margin-top: 42px; margin-bottom: 20px; }
     .hero-title { font-size: 27px !important; line-height: 1.35 !important; word-break: keep-all; }
     .hero-mobile-break { display: block; }
     .hero-description { margin-top: 12px; font-size: 15px !important; line-height: 1.6 !important; word-break: keep-all; }
-    .today-market { margin: 26px 0 14px; }
-    .today-market-heading { margin-bottom: 15px; }
+    .today-market { margin: 14px 0 10px; }
+    .today-market-heading { margin-bottom: 8px; }
     .today-market-title { font-size: 22px !important; line-height: 1.4 !important; word-break: keep-all; }
     .today-market-caption { font-size: 13px !important; line-height: 1.6 !important; word-break: keep-all; }
     .search-section-label { margin-top: 4px; }
@@ -670,9 +671,11 @@ body {
 .copy-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .copy-status.is-error { background: #8a3b32; font-size: 12px; white-space: normal; }
 @media (max-width: 700px) {
-    .signup-card { padding: 22px 18px; }
-    .signup-title { font-size: 21px; }
-    .signup-entry { padding: 12px 10px; }
+    .signup-card { padding: 18px 18px 14px; }
+    .signup-title { font-size: 21px; margin-bottom: 8px; }
+    .signup-description { line-height: 1.55; }
+    .signup-note { margin-bottom: 12px; line-height: 1.55; }
+    .signup-entry { margin: 12px 0 10px; padding: 10px; }
     .signup-entry-text { font-size: 16px; }
 }
 </style>
@@ -753,7 +756,7 @@ button.addEventListener('click', async () => {
 </script>
 </body>
 </html>
-""", height=330)
+""", height="content")
 
 # 선택형 상담 안내
 st.markdown("""
@@ -761,8 +764,13 @@ st.markdown("""
 .signup-help { padding: 12px 2px 24px; margin-bottom: 24px; border-bottom: 1px solid #e5e9e6; }
 .signup-help h2 { margin: 0 0 8px; color: #173f30; font-size: 18px !important; font-weight: 700; line-height: 1.5; }
 .signup-help p { margin: 0 0 14px; color: #747c77; font-size: 14px; line-height: 1.7; word-break: keep-all; }
-.signup-help a { display: flex; align-items: center; justify-content: center; min-height: 48px; border: 1px solid #bcc9c1; border-radius: 10px; color: #173f30 !important; font-size: 14px; font-weight: 650; text-decoration: none !important; }
-.signup-help a:hover, .signup-help a:focus { background: #f6f7f4; }
+.signup-help > a { display: flex; align-items: center; justify-content: center; min-height: 48px; border: 1px solid #bcc9c1; border-radius: 10px; color: #173f30 !important; font-size: 14px; font-weight: 650; text-decoration: none !important; }
+.signup-help > a:hover, .signup-help > a:focus { background: #f6f7f4; }
+@media (max-width: 700px) {
+    .signup-help { padding: 8px 2px 12px; margin-bottom: 0; }
+    .signup-help h2 { padding: 0; margin-bottom: 6px; }
+    .signup-help p { margin-bottom: 10px; line-height: 1.55; }
+}
 </style>
 <section class="signup-help" aria-labelledby="signup-help-title">
     <h2 id="signup-help-title">가입 전·후 도움이 필요하신가요?</h2>
