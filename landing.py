@@ -1,4 +1,5 @@
 import streamlit as st
+from base64 import b64encode
 from html import escape
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -72,13 +73,8 @@ st.markdown("""
 .st-key-today_market_image [data-testid="stImage"] { margin: 0; pointer-events: none; }
 .st-key-today_market_controls [data-testid="stImage"] img { display: block; max-width: 100%; height: auto; }
 .st-key-today_market_image [data-testid="stElementToolbar"] { display: none; }
-.st-key-today_market_image [data-testid="stElementContainer"]:has(> [data-testid="stDownloadButton"]) {
-    position: absolute; top: 2px; right: 8px; width: auto; max-width: calc(100% - 16px); z-index: 1;
-}
-.st-key-today_market_image [data-testid="stDownloadButton"] { margin: 0; }
-.st-key-today_market_image [data-testid="stDownloadButton"] button {
-    min-height: 44px; padding: 6px 10px; border: 0; border-radius: 8px;
-    background: #ffffff; color: #535c57; font-size: 12px; font-weight: 600;
+.st-key-today_market_image [data-testid="stElementContainer"]:has(> [data-testid="stIFrame"]) {
+    position: absolute; top: 2px; right: 8px; width: 106px; max-width: calc(100% - 16px); z-index: 1;
 }
 .today-market-selection { margin: 18px 0 8px; color: #173f30; font-size: 15px; font-weight: 750; text-align: center; }
 .search-section-label { margin: 2px 0 12px; color: #68716c; font-size: 13px; font-weight: 700; text-align: center; }
@@ -566,6 +562,43 @@ def refresh_market_report():
     save_market_report(png, datetime.now(ZoneInfo("Asia/Seoul")), price_basis)
 
 
+def render_market_report_download(report_png, snapshot_at):
+    # 표시 중인 원본 bytes만 사용하며 호스트의 새 탭 다운로드 설정을 거치지 않는다.
+    snapshot_date = snapshot_at.astimezone(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")
+    filename = f"축산_도매_시세표_{snapshot_date}.png"
+    encoded_png = b64encode(report_png).decode("ascii")
+    st.iframe(f"""
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><style>
+* {{ box-sizing: border-box; }}
+html, body {{ margin: 0; padding: 0; background: transparent; }}
+.download {{
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; min-height: 44px; padding: 6px 10px; border-radius: 8px;
+    background: #ffffff; color: #535c57; text-decoration: none;
+    font: 600 12px Pretendard, -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+}}
+.download:hover {{ background: #f6f7f4; color: #123326; }}
+.download:focus-visible {{ outline: 2px solid #173f30; outline-offset: -2px; }}
+.download svg {{ flex: 0 0 16px; }}
+</style></head>
+<body>
+<a class="download" download="{filename}" target="_self" aria-label="시세표 PNG 다운로드">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/>
+    </svg><span>다운로드</span>
+</a>
+<script>
+const bytes = Uint8Array.from(atob('{encoded_png}'), c => c.charCodeAt(0));
+const url = URL.createObjectURL(new Blob([bytes], {{type: 'image/png'}}));
+document.querySelector('.download').href = url;
+window.addEventListener('pagehide', () => URL.revokeObjectURL(url));
+</script>
+</body></html>
+""", height=44)
+
+
 @st.fragment
 def render_today_market():
     with st.container(key="today_market_controls"):
@@ -600,15 +633,14 @@ def render_today_market():
                     if saved is None:
                         st.info("저장된 시세표가 없습니다. 최신 시세로 갱신해주세요.")
                         return
-                    report_png, generated_at, price_basis = saved
+                    report_png, generated_at, _ = saved
                     st.markdown(
                         '<div class="today-market-selection">실시간 축산 도매 시세표</div>',
                         unsafe_allow_html=True,
                     )
-                    st.caption(f"최근 시세표 · {generated_at.astimezone(ZoneInfo('Asia/Seoul')):%Y.%m.%d} 기준")
-                    if price_basis:
-                        basis = datetime.fromisoformat(price_basis)
-                        st.caption(f"가격 조회 기준 · {basis.astimezone(ZoneInfo('Asia/Seoul')):%Y.%m.%d}")
+                    # 이 PNG의 가격 조회 검증 및 생성이 성공한 시각을 사용한다.
+                    # 파일 수정일이나 화면을 연 시각으로 대체하지 않는다.
+                    st.caption(f"시세 기준 {generated_at.astimezone(ZoneInfo('Asia/Seoul')):%m.%d %H:%M}")
                 report_area.image(report_png, use_container_width=True)
 
             # 기존 PNG를 먼저 전송해 갱신 중에도 계속 볼 수 있게 한다.
@@ -627,15 +659,7 @@ def render_today_market():
                     st.warning("최신 시세 갱신에 실패했습니다. 기존 시세표를 유지합니다. 잠시 후 다시 시도해주세요.")
             if saved_report is not None:
                 with download_area.container():
-                    st.download_button(
-                        "다운로드",
-                        icon=":material/download:",
-                        data=saved_report[0],
-                        file_name="동원_금천미트_축산_도매_시세표_A4_실시간_단가.png",
-                        mime="image/png",
-                        key="today_market_download",
-                        on_click="ignore",
-                    )
+                    render_market_report_download(saved_report[0], saved_report[1])
 
 
 render_today_market()
