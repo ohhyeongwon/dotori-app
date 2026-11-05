@@ -1,5 +1,6 @@
 import streamlit as st
 from html import escape
+from hashlib import sha256
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from io import BytesIO
@@ -576,7 +577,8 @@ def render_market_report_download(report_png, snapshot_at):
         data=report_png,
         file_name=f"축산_도매_시세표_{snapshot_date}.png",
         mime="image/png",
-        key="today_market_download",
+        # 한 번의 실행 중 기존 PNG와 새 PNG를 순서대로 렌더링할 수 있게 구분한다.
+        key=f"today_market_download_{sha256(report_png).hexdigest()}",
         on_click="ignore",
     )
 
@@ -624,25 +626,23 @@ def render_today_market():
                     # 파일 수정일이나 화면을 연 시각으로 대체하지 않는다.
                     st.caption(f"시세 기준 {generated_at.astimezone(ZoneInfo('Asia/Seoul')):%m.%d %H:%M}")
                 report_area.image(report_png, use_container_width=True)
+                with download_area.container():
+                    render_market_report_download(report_png, generated_at)
 
-            # 기존 PNG를 먼저 전송해 갱신 중에도 계속 볼 수 있게 한다.
+            # 이미지와 다운로드를 모두 먼저 전송한 뒤 자동 조회를 시작한다.
             show_saved_report(saved_report)
             if st.session_state.pop("today_market_refresh_pending", False):
-                refresh_status = st.empty()
-                refresh_status.caption("최신 시세 확인 중...")
                 try:
                     # API 내부의 기존 5분 캐시를 그대로 사용한다.
                     refresh_market_report()
                     latest_report = read_saved_market_report()
-                    if latest_report is not None:
+                    if latest_report is not None and (
+                        saved_report is None or latest_report[0] != saved_report[0]
+                    ):
                         saved_report = latest_report
                         show_saved_report(saved_report)
-                    refresh_status.empty()
                 except Exception:
-                    refresh_status.caption("최신 시세 확인에 실패했습니다. 기존 시세표를 유지합니다.")
-            if saved_report is not None:
-                with download_area.container():
-                    render_market_report_download(saved_report[0], saved_report[1])
+                    st.toast("최신 조회에 실패해 기존 시세표를 표시합니다.")
 
 
 render_today_market()
