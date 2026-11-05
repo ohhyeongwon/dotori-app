@@ -2,6 +2,12 @@ import streamlit as st
 from html import escape
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from io import BytesIO
+from pathlib import Path
+import os
+import tempfile
+
+from PIL import Image, PngImagePlugin
 
 from menu_data import (
     KAKAO_CHAT_URL,
@@ -9,7 +15,7 @@ from menu_data import (
     get_geumcheon_market_data,
     get_today_market_report,
 )
-from price_card import OVERALL_REPORT_SIZE, CATEGORY_REPORT_SIZE, create_market_report_png, create_price_card_png
+from price_card import OVERALL_REPORT_SIZE, create_market_report_png, create_price_card_png
 
 # =================================================================
 # 1. 페이지 설정 및 디자인 CSS
@@ -468,14 +474,78 @@ def close_today_market():
     st.session_state.today_market_selection = None
 
 
-@st.cache_data(ttl=300, max_entries=16, show_spinner=False)
-def cached_a4_report_png(groups, report_day):
-    # 가격 캐시와 같은 5분 수명. 날짜도 키에 포함해 자정 이후 전날 이미지를 재사용하지 않는다.
-    return create_market_report_png(
-        "실시간 축산 도매 시세표", groups,
-        queried_at=datetime.fromisoformat(report_day),
+MARKET_REPORT_SEED = Path(__file__).resolve().parent / "assets/market/last_successful.png"
+# Streamlit 세션과 5분 가격 캐시가 끝나도 마지막 정상본은 재사용한다.
+MARKET_REPORT_CACHE = Path(tempfile.gettempdir()) / "meat_lab_market" / "last_successful.png"
+
+
+def read_saved_market_report():
+    for path in (MARKET_REPORT_CACHE, MARKET_REPORT_SEED):
+        try:
+            png = path.read_bytes()
+            with Image.open(BytesIO(png)) as image:
+                generated_at = datetime.fromisoformat(image.info["generated_at"])
+                price_basis = image.info.get("price_basis")
+                if price_basis:
+                    datetime.fromisoformat(price_basis)
+                image.verify()
+            return png, generated_at, price_basis
+        except (OSError, ValueError, KeyError, SyntaxError):
+            continue
+    return None
+
+
+def save_market_report(png, generated_at, price_basis):
+    # 날짜와 PNG를 한 파일로 원자적으로 교체한다. 실패하면 기존 파일은 그대로 남는다.
+    output = BytesIO()
+    with Image.open(BytesIO(png)) as image:
+        metadata = PngImagePlugin.PngInfo()
+        metadata.add_text("generated_at", generated_at.isoformat())
+        metadata.add_text("price_basis", price_basis.isoformat())
+        image.save(output, format="PNG", pnginfo=metadata, dpi=image.info.get("dpi", (300, 300)))
+    MARKET_REPORT_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=MARKET_REPORT_CACHE.parent, suffix=".png", delete=False) as temp:
+        temp_path = Path(temp.name)
+        try:
+            temp.write(output.getvalue())
+        except BaseException:
+            temp.close()
+            temp_path.unlink(missing_ok=True)
+            raise
+    try:
+        os.replace(temp_path, MARKET_REPORT_CACHE)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+def refresh_market_report():
+    report = get_today_market_report(None, include_live_prices=True)
+    # API 오류가 예외 대신 빈 가격으로 반환되어도 정상본을 덮어쓰지 않는다.
+    items = [item for group in report["groups"] for item in group["items"]]
+    if not items or any(item.get("kg_price") is None for item in items):
+        raise ValueError("시세 조회가 완료되지 않았습니다.")
+    if any(d.get("status") == "error" for d in report.get("diagnostics", [])):
+        raise ValueError("시세 조회에 실패했습니다.")
+    render_groups = [
+        {
+            "category_id": group["category_id"],
+            "category_name": group["category_name"],
+            "items": [
+                {key: item.get(key) for key in (
+                    "item_id", "item_name", "storage_status", "kg_price"
+                )}
+                for item in group["items"]
+            ],
+        }
+        for group in report["groups"]
+    ]
+    price_basis = report.get("queried_at") or datetime.now(ZoneInfo("Asia/Seoul"))
+    png = create_market_report_png(
+        "실시간 축산 도매 시세표", render_groups,
+        queried_at=price_basis,
         canvas_size=OVERALL_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
     )
+    save_market_report(png, datetime.now(ZoneInfo("Asia/Seoul")), price_basis)
 
 
 @st.fragment
@@ -502,64 +572,49 @@ def render_today_market():
         )
         selected_report_id = st.session_state.today_market_selection
         if selected_report_id:
-            loading = st.empty()
-            try:
-                with loading.container():
-                    with st.status("실시간 시세표를 불러오고 있습니다...", expanded=False):
-                        selected_report = get_today_market_report(
-                            None if selected_report_id == "all" else selected_report_id,
-                            include_live_prices=True,
-                        )
-                        is_overall_report = selected_report_id == "all"
-                        report_title = "실시간 축산 도매 시세표" if is_overall_report else selected_report["title"]
-                        if is_overall_report:
-                            # 조회 시각/상품 메타데이터는 매번 달라도 표시 내용이 같으면 재사용한다.
-                            render_groups = [
-                                {
-                                    "category_id": group["category_id"],
-                                    "category_name": group["category_name"],
-                                    "items": [
-                                        {key: item.get(key) for key in (
-                                            "item_id", "item_name", "storage_status", "kg_price"
-                                        )}
-                                        for item in group["items"]
-                                    ],
-                                }
-                                for group in selected_report["groups"]
-                            ]
-                            report_png = cached_a4_report_png(
-                                render_groups, datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
-                            )
-                        else:
-                            report_png = create_market_report_png(
-                                report_title, selected_report["groups"],
-                                queried_at=selected_report.get("queried_at"),
-                                canvas_size=CATEGORY_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
-                            )
-            finally:
-                loading.empty()
-            st.markdown(
-                f'<div class="today-market-selection">{escape(report_title)}</div>',
-                unsafe_allow_html=True,
-            )
-            st.image(report_png, use_container_width=True)
-            safe_name = (
-                "축산_도매_시세표_A4" if is_overall_report
-                else selected_report["groups"][0]["category_name"].replace(" ", "_")
-            )
-            download_label = (
-                "PNG 저장" if is_overall_report
-                else f'{selected_report["groups"][0]["category_name"]} 단가표 저장(PNG)'
-            )
-            st.download_button(
-                download_label,
-                data=report_png,
-                file_name=f"동원_금천미트_{safe_name}_실시간_단가.png",
-                mime="image/png",
+            saved_report = read_saved_market_report()
+            report_area = st.empty()
+
+            def show_saved_report(saved):
+                with report_area.container():
+                    if saved is None:
+                        st.info("저장된 시세표가 없습니다. 최신 시세로 갱신해주세요.")
+                        return
+                    report_png, generated_at, price_basis = saved
+                    st.markdown(
+                        '<div class="today-market-selection">실시간 축산 도매 시세표</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.caption(f"최근 시세표 · {generated_at.astimezone(ZoneInfo('Asia/Seoul')):%Y.%m.%d} 기준")
+                    if price_basis:
+                        basis = datetime.fromisoformat(price_basis)
+                        st.caption(f"가격 조회 기준 · {basis.astimezone(ZoneInfo('Asia/Seoul')):%Y.%m.%d}")
+                    st.image(report_png, use_container_width=True)
+
+            # 기존 PNG를 먼저 전송해 갱신 중에도 계속 볼 수 있게 한다.
+            show_saved_report(saved_report)
+            if st.button(
+                "최신 시세로 갱신",
+                key="today_market_refresh",
                 use_container_width=True,
-                key="today_market_download",
-                on_click="ignore",
-            )
+            ):
+                try:
+                    with st.spinner("최신 시세를 확인하고 있습니다..."):
+                        refresh_market_report()
+                    saved_report = read_saved_market_report()
+                    show_saved_report(saved_report)
+                except Exception:
+                    st.warning("최신 시세 갱신에 실패했습니다. 기존 시세표를 유지합니다. 잠시 후 다시 시도해주세요.")
+            if saved_report is not None:
+                st.download_button(
+                    "PNG 저장",
+                    data=saved_report[0],
+                    file_name="동원_금천미트_축산_도매_시세표_A4_실시간_단가.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key="today_market_download",
+                    on_click="ignore",
+                )
             st.button(
                 "단가표 닫기",
                 key="today_market_close",
