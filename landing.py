@@ -625,6 +625,152 @@ def render_today_market():
 
 render_today_market()
 
+# 신규가입 안내 — 상담 없이 공식몰로 바로 이동
+st.iframe("""
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: transparent; }
+body {
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Noto Sans KR", "Malgun Gothic", sans-serif;
+    color: #171a18;
+}
+.signup-card {
+    width: 100%; padding: 24px; border: 1px solid #e5e1d8;
+    border-radius: 12px; background: #ffffff; position: relative;
+}
+.signup-title { margin: 0 0 12px; color: #12291f; font-size: 22px; font-weight: 750; line-height: 1.4; letter-spacing: -.025em; }
+.signup-description { margin: 0; color: #535c57; font-size: 14px; line-height: 1.65; word-break: keep-all; }
+.signup-entry {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin: 18px 0 14px; padding: 14px; border-radius: 9px; background: #f5f4ee;
+}
+.signup-entry-text { color: #173f30; font-size: 17px; font-weight: 750; line-height: 1.5; word-break: keep-all; }
+.signup-copy { flex-shrink: 0; padding: 6px 0 6px 8px; border: 0; background: transparent; color: #606762; font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.signup-note { margin: 0 0 18px; color: #747c77; font-size: 13px; line-height: 1.7; word-break: keep-all; }
+.signup-cta {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    min-height: 50px; padding: 0 14px; border-radius: 10px;
+    background: #173f30; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none;
+}
+.signup-cta:hover, .signup-cta:focus { background: #123326; }
+.signup-copy:focus-visible { outline: 2px solid #173f30; outline-offset: 3px; }
+.copy-status {
+    position: absolute; left: 50%; bottom: 12px; z-index: 2;
+    max-width: calc(100% - 40px); margin: 0; padding: 6px 10px;
+    border-radius: 8px; background: #173f30; color: #ffffff;
+    font-size: 13px; line-height: 1.4; white-space: nowrap;
+    opacity: 0; pointer-events: none;
+    transform: translate(-50%, 4px); transition: opacity .15s ease, transform .15s ease;
+}
+.copy-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.copy-status.is-error { background: #8a3b32; font-size: 12px; white-space: normal; }
+@media (max-width: 700px) {
+    .signup-card { padding: 22px 18px; }
+    .signup-title { font-size: 21px; }
+    .signup-entry { padding: 12px 10px; }
+    .signup-entry-text { font-size: 16px; }
+}
+</style>
+</head>
+<body>
+<section class="signup-card" aria-labelledby="signup-title">
+    <h2 id="signup-title" class="signup-title">금천미트 처음 이용하시나요?</h2>
+    <p class="signup-description">회원가입 시 '가입경로 상세'에 권오현을 입력해주세요.</p>
+    <div class="signup-entry">
+        <span class="signup-entry-text">가입경로 상세 → 권오현</span>
+        <button class="signup-copy" type="button">권오현 복사</button>
+    </div>
+    <p class="signup-note">상담 없이 바로 가입 가능하며, 필요할 때 품목·규격·단가 관련 상담을 받을 수 있습니다.</p>
+    <a class="signup-cta" href="https://www.ekcm.co.kr/" target="_blank" rel="noopener noreferrer">금천미트 가입하기</a>
+    <p class="copy-status" role="status" aria-live="polite"></p>
+</section>
+<script>
+const button = document.querySelector('.signup-copy');
+const status = document.querySelector('.copy-status');
+const copyText = '권오현';
+
+function setStatus(message, state, duration) {
+    status.textContent = message;
+    status.className = `copy-status is-visible ${state}`;
+    clearTimeout(button.copyStatusTimer);
+    button.copyStatusTimer = setTimeout(() => {
+        status.textContent = '';
+        status.className = 'copy-status';
+    }, duration);
+}
+
+function legacyCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, text.length);
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return copied;
+}
+
+button.addEventListener('click', async () => {
+    let copied = false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(copyText);
+            copied = true;
+        } catch (error) {
+            copied = false;
+        }
+    }
+
+    if (!copied) {
+        try {
+            copied = legacyCopy(copyText);
+        } catch (error) {
+            copied = false;
+        }
+    }
+
+    if (copied) {
+        setStatus('복사되었습니다.', 'is-success', 1600);
+    } else {
+        setStatus(
+            '복사에 실패했습니다. 이름을 직접 선택해 복사해주세요.',
+            'is-error',
+            3500
+        );
+    }
+});
+</script>
+</body>
+</html>
+""", height=330)
+
+# 선택형 상담 안내
+st.markdown("""
+<style>
+.signup-help { padding: 12px 2px 24px; margin-bottom: 24px; border-bottom: 1px solid #e5e9e6; }
+.signup-help h2 { margin: 0 0 8px; color: #173f30; font-size: 18px !important; font-weight: 700; line-height: 1.5; }
+.signup-help p { margin: 0 0 14px; color: #747c77; font-size: 14px; line-height: 1.7; word-break: keep-all; }
+.signup-help a { display: flex; align-items: center; justify-content: center; min-height: 48px; border: 1px solid #bcc9c1; border-radius: 10px; color: #173f30 !important; font-size: 14px; font-weight: 650; text-decoration: none !important; }
+.signup-help a:hover, .signup-help a:focus { background: #f6f7f4; }
+</style>
+<section class="signup-help" aria-labelledby="signup-help-title">
+    <h2 id="signup-help-title">가입 전·후 도움이 필요하신가요?</h2>
+    <p>품목, 규격, 단가 관련해서 궁금한 점이 있으면 편하게 문의해주세요.</p>
+    <a href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer">1:1 카카오톡 상담</a>
+</section>
+""", unsafe_allow_html=True)
+
 st.markdown('<div class="search-section-label">메뉴별 추천 원육 검색</div>', unsafe_allow_html=True)
 
 search_input, search_action = st.columns([5, 1.25], gap="small")
@@ -722,144 +868,3 @@ if search_query:
             )
     else:
         st.error("해당 메뉴는 연구소에 없습니다.")
-
-# 가입 및 시세 안내
-st.iframe("""
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<style>
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: transparent; }
-body {
-    font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-                 "Noto Sans KR", "Malgun Gothic", sans-serif;
-    color: #171a18;
-}
-.signup-card {
-    width: 100%; padding: 24px 32px 18px; border: 1px solid #e5e1d8;
-    border-radius: 12px; background: #ffffff; text-align: center; position: relative;
-}
-.signup-eyebrow {
-    color: #9a7a3d; font-size: 13px; font-weight: 700; letter-spacing: .025em;
-}
-.signup-name {
-    margin: 16px 0 12px; color: #12291f; font-size: 28px; font-weight: 720;
-}
-.signup-benefit {
-    margin: 0 0 16px; color: #606762; font-size: 14px; font-weight: 500;
-    line-height: 1.6; letter-spacing: -0.01em;
-}
-.signup-cta {
-    display: flex; align-items: center; justify-content: center; width: 100%;
-    min-height: 50px; padding: 0 18px; border: 0; border-radius: 12px;
-    background: #173f30; color: #ffffff; font: inherit; font-weight: 700;
-    cursor: pointer;
-}
-.signup-cta:hover, .signup-cta:focus { background: #123326; }
-.copy-status {
-    position: absolute; left: 50%; bottom: 12px; z-index: 2;
-    max-width: calc(100% - 40px); margin: 0; padding: 6px 10px;
-    border-radius: 8px; background: #173f30; color: #ffffff;
-    font-size: 13px; line-height: 1.4; white-space: nowrap;
-    opacity: 0; pointer-events: none;
-    transform: translate(-50%, 4px); transition: opacity .15s ease, transform .15s ease;
-}
-.copy-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
-.copy-status.is-error {
-    background: #8a3b32; color: #ffffff; font-size: 12px; white-space: normal;
-}
-@media (max-width: 700px) {
-    .signup-card { padding: 22px 20px 16px; }
-    .signup-name { margin: 14px 0 10px; }
-    .signup-benefit { margin-bottom: 14px; font-size: 13px; }
-}
-</style>
-</head>
-<body>
-<div class="signup-card">
-    <div class="signup-eyebrow">금천미트 가입</div>
-    <div class="signup-name">권오현</div>
-    <p class="signup-benefit">가입 시 추천인 입력하면 각종 혜택을 안내받을 수 있습니다.</p>
-    <button class="signup-cta" type="button">추천인 복사</button>
-    <p class="copy-status" role="status" aria-live="polite"></p>
-</div>
-<script>
-const button = document.querySelector('.signup-cta');
-const status = document.querySelector('.copy-status');
-const copyText = '권오현';
-
-function setStatus(message, state, duration) {
-    status.textContent = message;
-    status.className = `copy-status is-visible ${state}`;
-    clearTimeout(button.copyStatusTimer);
-    button.copyStatusTimer = setTimeout(() => {
-        status.textContent = '';
-        status.className = 'copy-status';
-    }, duration);
-}
-
-function legacyCopy(text) {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    textarea.setSelectionRange(0, text.length);
-    const copied = document.execCommand('copy');
-    document.body.removeChild(textarea);
-    return copied;
-}
-
-button.addEventListener('click', async () => {
-    let copied = false;
-
-    if (navigator.clipboard && window.isSecureContext) {
-        try {
-            await navigator.clipboard.writeText(copyText);
-            copied = true;
-        } catch (error) {
-            copied = false;
-        }
-    }
-
-    if (!copied) {
-        try {
-            copied = legacyCopy(copyText);
-        } catch (error) {
-            copied = false;
-        }
-    }
-
-    if (copied) {
-        setStatus('복사되었습니다.', 'is-success', 1600);
-    } else {
-        setStatus(
-            '복사에 실패했습니다. 이름을 직접 선택해 복사해주세요.',
-            'is-error',
-            3500
-        );
-    }
-});
-</script>
-</body>
-</html>
-""", height=230)
-
-st.markdown("""
-<div class='market-container'>
-    <a class='market-cta' href='https://www.ekcm.co.kr/' target='_blank'>동원 금천미트 공식몰</a>
-</div>
-""", unsafe_allow_html=True)
-
-# 카카오톡 상담
-st.markdown(f"""
-<div class='btn-container'>
-    <a href='https://open.kakao.com/o/sG85euyi' class='btn-kakao' target='_blank'>1:1 카카오톡 상담</a>
-</div>
-""", unsafe_allow_html=True)
