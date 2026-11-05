@@ -111,27 +111,42 @@ for market_category in TODAY_MARKET_CATEGORIES:
         if market_item["item_id"] == "brazil_frozen_chicken_thigh":
             market_item["origin"] = "브라질산"
 
-# 승인된 한우 단가 기준입니다. 필터는 API 원본 필드의 정확 일치만 사용합니다.
+# 사이트 거세 부위 버튼 범위에서 등급·브랜드 무관 최저가를 비교합니다.
 for market_category in TODAY_MARKET_CATEGORIES:
     for market_item in market_category["items"]:
         if market_item["item_id"] == "hanwoo_sirloin":
             market_item["lookup"].update({
-                "method": "category", "category_no": "130102",
-                "exact_filters": {"lsprdGrdNm": "1"},
+                "method": "category", "category_no": (
+                    "130102", "130202", "130302", "130402", "130602",
+                    "130702", "815888", "816995", "817765", "819104",
+                ),
+                "exact_filters": {
+                    "lsspeNm": "한우", "plspartNm": "등심", "strgMthdGbNm": "냉장",
+                },
             })
-            market_item["review_note"] = "1등급 상품만 비교"
+            market_item["storage_status"] = "냉장"
+            market_item["review_note"] = "사이트 거세 등심 버튼 범위, 등급·브랜드 무관"
         elif market_item["item_id"] == "hanwoo_brisket":
             market_item["lookup"].update({
                 "method": "category", "category_no": "130128",
-                "exact_filters": {"brandNm": "금천한우"},
+                "exact_filters": {
+                    "lsspeNm": "한우", "plspartNm": "차돌박이", "strgMthdGbNm": "냉동",
+                },
             })
-            market_item["review_note"] = "원물·세절 여부 현장 확인 필요"
+            market_item["storage_status"] = "냉동"
+            market_item["review_note"] = "사이트 거세 냉동 차돌박이 버튼 범위, 등급·브랜드 무관"
         elif market_item["item_id"] == "hanwoo_round":
             market_item["lookup"].update({
-                "method": "category", "category_no": "130108",
-                "exact_filters": {},
+                "method": "category", "category_no": (
+                    "130108", "130208", "130309", "130409", "130509",
+                    "130809", "815882", "817000", "817770", "819097",
+                ),
+                "exact_filters": {
+                    "lsspeNm": "한우", "plspartNm": "우둔살", "strgMthdGbNm": "냉장",
+                },
             })
-            market_item["review_note"] = "현재 판매 가능한 전체 후보 비교"
+            market_item["storage_status"] = "냉장"
+            market_item["review_note"] = "사이트 거세 우둔살 버튼 범위, 등급·브랜드 무관"
 
 # 승인된 수입 냉동육 3개 품목만 실시간 단가에 연결합니다.
 RAW_CANDIDATE_REVIEW_NOTE = (
@@ -144,9 +159,11 @@ for market_category in TODAY_MARKET_CATEGORIES:
     for market_item in market_category["items"]:
         if market_item["item_id"] == "imported_beef_back_rib":
             market_item["lookup"].update({
-                "method": "category", "category_no": "420109",
+                "method": "category", "category_no": (
+                    "420109", "420212", "420309", "810846", "813568",
+                ),
                 "exact_filters": {
-                    "homeNm": "미국", "strgMthdGbNm": "냉동",
+                    "strgMthdGbNm": "냉동",
                     "plspartNm": "우빽립", "lsspeNm": "수입우", "ctmeatYn": "N",
                 },
                 "excluded_name_keywords": RAW_CANDIDATE_EXCLUDED_KEYWORDS,
@@ -306,7 +323,7 @@ for market_category in TODAY_MARKET_CATEGORIES:
             })
             market_item["review_note"] = "링크 상품군은 API상 앞다리 부위명으로 일관 관리"
 
-# 최종 승인된 육우 채끝 2등급과 세절육 3개 품목입니다.
+# 육우 거세 채끝은 등급 무관으로 비교하며 세절육 3개 품목은 기존 기준을 유지합니다.
 for market_category in TODAY_MARKET_CATEGORIES:
     for market_item in market_category["items"]:
         if market_item["item_id"] == "beef_cattle_striploin":
@@ -319,11 +336,11 @@ for market_category in TODAY_MARKET_CATEGORIES:
                 "exact_filters": {
                     "homeNm": "국내산", "strgMthdGbNm": "냉장",
                     "plspartNm": "채끝", "lsspeNm": "육우",
-                    "lsprdGrdNm": "2", "ctmeatYn": "N",
+                    "ctmeatYn": "N",
                 },
             })
             market_item["review_note"] = (
-                "육우 채끝 대표 시세는 재고 수가 가장 많은 2등급 기준으로 설정"
+                "사이트 육우 거세 채끝 버튼 범위, 등급·브랜드 무관"
             )
         elif market_item["item_id"] == "sliced_beef_belly":
             market_item["lookup"].update({
@@ -400,9 +417,8 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'hanwoo_striploin',
    'item_name': '채끝',
    'lookup': {'method': 'category',
-              'category_no': ('130103', '130203', '130303', '130403', '130503', '130703', '130803', '815886',
-                              '817766', '819102', '812596', '140103', '817048', '140203', '140303', '140503',
-                              '140603', '140703', '815916', '817796', '819133', '1503'),
+              'category_no': ('130103', '130203', '130303', '130403', '130503', '130603',
+                              '130703', '130803', '815886', '816996', '817766', '819102'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -440,9 +456,8 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'hanwoo_eye_round',
    'item_name': '홍두깨',
    'lookup': {'method': 'category',
-              'category_no': ('130109', '130209', '130310', '130410', '130510', '130810', '815881', '817771',
-                              '819096', '812602', '140109', '817054', '140209', '140310', '140511', '140610',
-                              '815911', '817801', '819127', '1509'),
+              'category_no': ('130109', '130209', '130310', '130410', '130510', '130608',
+                              '130810', '815881', '817001', '817771', '819096'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -480,8 +495,8 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'hanwoo_brisket_point',
    'item_name': '양지',
    'lookup': {'method': 'category',
-              'category_no': ('130116', '130215', '130710', '130814', '815877', '817775', '819092', '812605',
-                              '140116', '817057', '140215', '140710', '815907', '817805', '819123', '1516'),
+              'category_no': ('130116', '130215', '130710', '130814', '815877', '817005',
+                              '817775', '819092'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -499,9 +514,8 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'hanwoo_skirt',
    'item_name': '치마',
    'lookup': {'method': 'category',
-              'category_no': ('130112', '130213', '130315', '130416', '130514', '130712', '130815', '815873',
-                              '817776', '819091', '812606', '140112', '817058', '140213', '140315', '140517',
-                              '140614', '140712', '815902', '817806', '819122', '1512'),
+              'category_no': ('130112', '130213', '130315', '130416', '130514', '130613',
+                              '130712', '130815', '815873', '817007', '817776', '819091'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -539,9 +553,8 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'hanwoo_outside_skirt',
    'item_name': '안창',
    'lookup': {'method': 'category',
-              'category_no': ('130120', '130218', '130320', '130421', '130519', '130716', '815869', '817781',
-                              '819086', '812613', '140120', '817065', '140218', '140320', '140522', '140619',
-                              '140716', '815898', '817811', '819117', '1520'),
+              'category_no': ('130120', '130218', '130320', '130421', '130519', '130716',
+                              '815869', '817012', '817781', '819086'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -558,9 +571,9 @@ NEW_MARKET_ITEMS = [('hanwoo',
  ('hanwoo',
   {'item_id': 'hanwoo_hanging',
    'item_name': '토시',
-   'lookup': {'method': None,
-              'category_no': ('130121', '814514', '130520', '816035', '817782', '819085', '812614', '140121',
-                              '817066', '814524', '140620', '816025', '817812', '819116', '1521'),
+   'lookup': {'method': 'category',
+              'category_no': ('130121', '130520', '130617', '814514', '816035', '817011',
+                              '817782', '819085'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -568,13 +581,13 @@ NEW_MARKET_ITEMS = [('hanwoo',
               'filter_variants': [{'lsspeNm': '한우', 'plspartNm': '토시살'}],
               'excluded_name_keywords': ['양념', '세절', '슬라이스', '큐브', '다짐육', '민찌', '돈가스', '돈까스', '대패', '불고기', '샤브',
                                          '찌개용', '구이용', '스테이크용', '소포장', '절단']},
-   'display_status': '미연결',
+   'display_status': '연동 준비 중',
    'origin': '국내산',
    'storage_status': '냉장',
    'image_url': '',
    'image_source': '',
    'image_status': '미연결',
-   'review_note': '판매 상품에 토시살 정확 일치 없음: 혼합 부위 또는 부위명 누락'}),
+   'review_note': '사이트 거세 토시살 버튼 범위, 토시살 정확 일치·냉장·등급·브랜드 무관'}),
  ('beef_cattle',
   {'item_id': 'beef_cattle_tenderloin',
    'item_name': '냉장 안심',
@@ -598,8 +611,7 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'beef_cattle_blade',
    'item_name': '냉장 부채살',
    'lookup': {'method': 'category',
-              'category_no': ('210107', '210207', '210310', '210412', '210506', '210607', '220107', '220210',
-                              '220313', '220406', '220507'),
+              'category_no': ('210107', '210207', '210310', '210412', '210506', '210607'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
@@ -1026,8 +1038,7 @@ NEW_MARKET_ITEMS = [('hanwoo',
   {'item_id': 'imported_pork_loin_rib',
    'item_name': '냉동 로인립',
    'lookup': {'method': 'category',
-              'category_no': ('520104', '520105', '816514', '520308', '816524', '520406', '813584', '817724',
-                              '812884', '816534', '818540', '816295', '816274', '818084'),
+              'category_no': ('520104', '520308', '520406', '812884', '813584'),
               'goods_no': '',
               'search_keyword': '',
               'selection_policy': 'lowest_price_per_kg',
