@@ -133,7 +133,9 @@ st.markdown("""
     width: 100%; background: #d5ad55; color: #171a18 !important; font-size: 15px; box-shadow: none;
 }
 @media (max-width: 700px) {
-    html, body, .stApp { max-width: 100%; overflow-x: hidden; }
+    html, body, .stApp { max-width: 100%; }
+    html, body { overflow-x: clip; }
+    [data-testid="stMain"] { overflow-y: auto; touch-action: pan-y pinch-zoom; }
     .block-container {
         width: 100% !important; max-width: 100% !important; min-width: 0 !important;
         margin: 0 auto !important; padding: 0.35rem 16px 0.75rem !important;
@@ -634,7 +636,7 @@ st.iframe("""
 <meta charset="utf-8">
 <style>
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: transparent; }
+html, body { margin: 0; padding: 0; background: transparent; touch-action: pan-y pinch-zoom; }
 body {
     font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
                  "Noto Sans KR", "Malgun Gothic", sans-serif;
@@ -758,25 +760,19 @@ button.addEventListener('click', async () => {
 </html>
 """, height="content")
 
-# 선택형 상담 안내
+# 선택형 카카오 상담
 st.markdown("""
 <style>
-.signup-help { padding: 12px 2px 24px; margin-bottom: 24px; border-bottom: 1px solid #e5e9e6; }
-.signup-help h2 { margin: 0 0 8px; color: #173f30; font-size: 18px !important; font-weight: 700; line-height: 1.5; }
-.signup-help p { margin: 0 0 14px; color: #747c77; font-size: 14px; line-height: 1.7; word-break: keep-all; }
-.signup-help > a { display: flex; align-items: center; justify-content: center; min-height: 48px; border: 1px solid #bcc9c1; border-radius: 10px; color: #173f30 !important; font-size: 14px; font-weight: 650; text-decoration: none !important; }
-.signup-help > a:hover, .signup-help > a:focus { background: #f6f7f4; }
-@media (max-width: 700px) {
-    .signup-help { padding: 8px 2px 12px; margin-bottom: 0; }
-    .signup-help h2 { padding: 0; margin-bottom: 6px; }
-    .signup-help p { margin-bottom: 10px; line-height: 1.55; }
-}
+.signup-help { padding: 0 0 12px; margin: 0; }
+.signup-help > a { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; padding: 10px 16px; border: 1px solid #fee500; border-radius: 10px; background: #fee500; color: #191919 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; }
+.signup-help > a:hover { background: #f4dc00; border-color: #f4dc00; }
+.signup-help > a:focus-visible { outline: 2px solid #191919; outline-offset: 3px; }
+.kakao-bubble { position: relative; flex: 0 0 20px; width: 20px; height: 15px; border-radius: 50%; background: #191919; }
+.kakao-bubble::after { content: ""; position: absolute; left: 3px; bottom: -3px; width: 6px; height: 6px; background: #191919; transform: skewY(-35deg); }
 </style>
-<section class="signup-help" aria-labelledby="signup-help-title">
-    <h2 id="signup-help-title">가입 전·후 도움이 필요하신가요?</h2>
-    <p>품목, 규격, 단가 관련해서 궁금한 점이 있으면 편하게 문의해주세요.</p>
-    <a href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer">1:1 카카오톡 상담</a>
-</section>
+<div class="signup-help">
+    <a href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer"><span class="kakao-bubble" aria-hidden="true"></span><span>1:1 카카오톡 상담</span></a>
+</div>
 """, unsafe_allow_html=True)
 
 # 재사용을 위해 검색 기능을 보관한다. 메인 화면에서는 호출하지 않는다.
