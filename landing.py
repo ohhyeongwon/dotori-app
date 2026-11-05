@@ -771,100 +771,102 @@ st.markdown("""
 </section>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="search-section-label">메뉴별 추천 원육 검색</div>', unsafe_allow_html=True)
+# 재사용을 위해 검색 기능을 보관한다. 메인 화면에서는 호출하지 않는다.
+def render_menu_search():
+    st.markdown('<div class="search-section-label">메뉴별 추천 원육 검색</div>', unsafe_allow_html=True)
 
-search_input, search_action = st.columns([5, 1.25], gap="small")
-with search_input:
-    search_query = st.text_input(
-        "메뉴 검색",
-        placeholder="육회, 돈가스, 삼겹살 검색",
-        label_visibility="collapsed"
-    )
-with search_action:
-    st.button("검색", use_container_width=True, type="primary")
-
-matched_key = None
-
-if search_query:
-    search_query = search_query.strip()
-
-    for key in expert_db.keys():
-        if search_query in key:
-            matched_key = key
-            break
-
-    if matched_key:
-        data = expert_db[matched_key]
-        card_data = get_card_data(matched_key)
-        market_data = get_geumcheon_market_data(matched_key)
-        market_message = (
-            "실시간 시세 연동 예정"
-            if market_data["market_price"] == "준비중"
-            else market_data["market_price"]
+    search_input, search_action = st.columns([5, 1.25], gap="small")
+    with search_input:
+        search_query = st.text_input(
+            "메뉴 검색",
+            placeholder="육회, 돈가스, 삼겹살 검색",
+            label_visibility="collapsed"
         )
-        stock_message = (
-            "확인 예정"
-            if market_data["stock_status"] == "준비중"
-            else market_data["stock_status"]
-        )
-        market_products = market_data.get("products", [])
-        if market_products:
-            market_items_html = "".join(
-                f"<li>{escape(product['label'])} — {product['kg_price']:,.0f}원/kg</li>"
-                for product in market_products
+    with search_action:
+        st.button("검색", use_container_width=True, type="primary")
+
+    matched_key = None
+
+    if search_query:
+        search_query = search_query.strip()
+
+        for key in expert_db.keys():
+            if search_query in key:
+                matched_key = key
+                break
+
+        if matched_key:
+            data = expert_db[matched_key]
+            card_data = get_card_data(matched_key)
+            market_data = get_geumcheon_market_data(matched_key)
+            market_message = (
+                "실시간 시세 연동 예정"
+                if market_data["market_price"] == "준비중"
+                else market_data["market_price"]
             )
-            market_content_html = (
-                f'<ol class="result-market-list">{market_items_html}</ol>'
-                '<div class="result-market-footnote">'
-                '금천미트 실시간 조회 · 가격 및 재고는 변동될 수 있습니다.'
-                '</div>'
+            stock_message = (
+                "확인 예정"
+                if market_data["stock_status"] == "준비중"
+                else market_data["stock_status"]
             )
+            market_products = market_data.get("products", [])
+            if market_products:
+                market_items_html = "".join(
+                    f"<li>{escape(product['label'])} — {product['kg_price']:,.0f}원/kg</li>"
+                    for product in market_products
+                )
+                market_content_html = (
+                    f'<ol class="result-market-list">{market_items_html}</ol>'
+                    '<div class="result-market-footnote">'
+                    '금천미트 실시간 조회 · 가격 및 재고는 변동될 수 있습니다.'
+                    '</div>'
+                )
+            else:
+                market_content_html = f'<div class="result-market-note">{escape(market_message)}</div>'
+            st.markdown(f"""
+            <div class="result-card">
+                <div class="result-hero">
+                    <div class="result-eyebrow">이 메뉴에는 <span>추천 원육</span></div>
+                    <div class="result-pick">{data['pro_pick']}</div>
+                    <div class="result-recommendation">가장 적합한 원육으로 추천합니다.</div>
+                </div>
+                <div class="result-body">
+                    <div class="result-priority">
+                        <div class="result-priority-item">
+                            <div class="result-priority-label">추천 규격</div>
+                            <div class="result-priority-value">{card_data['specification']}</div>
+                        </div>
+                        <div class="result-priority-item">
+                            <div class="result-priority-label">실시간 금천미트 시세</div>
+                            {market_content_html}
+                        </div>
+                    </div>
+                    <div class="result-supporting">
+                        <div class="result-support-row">
+                            <div class="result-support-label">원산지</div>
+                            <div class="result-support-value">{card_data['origin']}</div>
+                        </div>
+                        <div class="result-support-row">
+                            <div class="result-support-label">선택 이유</div>
+                            <div class="result-support-value">{data['pro_reason']}</div>
+                        </div>
+                        <div class="result-support-row">
+                            <div class="result-support-label">재고 상태</div>
+                            <div class="result-support-value result-stock">{stock_message}</div>
+                        </div>
+                    </div>
+                    <a class="result-kakao" href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer">1:1 카카오톡 상담</a>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if market_products:
+                price_card_png = create_price_card_png(matched_key, market_products)
+                st.download_button(
+                    "이미지 저장 (PNG)",
+                    data=price_card_png,
+                    file_name=f"도토리다판다_{matched_key}_실시간_단가표.png",
+                    mime="image/png",
+                    use_container_width=True,
+                )
         else:
-            market_content_html = f'<div class="result-market-note">{escape(market_message)}</div>'
-        st.markdown(f"""
-        <div class="result-card">
-            <div class="result-hero">
-                <div class="result-eyebrow">이 메뉴에는 <span>추천 원육</span></div>
-                <div class="result-pick">{data['pro_pick']}</div>
-                <div class="result-recommendation">가장 적합한 원육으로 추천합니다.</div>
-            </div>
-            <div class="result-body">
-                <div class="result-priority">
-                    <div class="result-priority-item">
-                        <div class="result-priority-label">추천 규격</div>
-                        <div class="result-priority-value">{card_data['specification']}</div>
-                    </div>
-                    <div class="result-priority-item">
-                        <div class="result-priority-label">실시간 금천미트 시세</div>
-                        {market_content_html}
-                    </div>
-                </div>
-                <div class="result-supporting">
-                    <div class="result-support-row">
-                        <div class="result-support-label">원산지</div>
-                        <div class="result-support-value">{card_data['origin']}</div>
-                    </div>
-                    <div class="result-support-row">
-                        <div class="result-support-label">선택 이유</div>
-                        <div class="result-support-value">{data['pro_reason']}</div>
-                    </div>
-                    <div class="result-support-row">
-                        <div class="result-support-label">재고 상태</div>
-                        <div class="result-support-value result-stock">{stock_message}</div>
-                    </div>
-                </div>
-                <a class="result-kakao" href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer">1:1 카카오톡 상담</a>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if market_products:
-            price_card_png = create_price_card_png(matched_key, market_products)
-            st.download_button(
-                "이미지 저장 (PNG)",
-                data=price_card_png,
-                file_name=f"도토리다판다_{matched_key}_실시간_단가표.png",
-                mime="image/png",
-                use_container_width=True,
-            )
-    else:
-        st.error("해당 메뉴는 연구소에 없습니다.")
+            st.error("해당 메뉴는 연구소에 없습니다.")
