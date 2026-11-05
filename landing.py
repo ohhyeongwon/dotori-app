@@ -61,8 +61,25 @@ st.markdown("""
 .st-key-today_market_controls [data-testid="stButton"] button { min-height: 48px; border-radius: 11px; font-size: 14px; font-weight: 700; }
 .st-key-today_market_overall button { min-height: 58px !important; border-color: #173f30 !important; background: #173f30 !important; color: #ffffff !important; font-size: 16px !important; }
 .st-key-today_market_toggle button { min-height: 52px !important; border-color: #b9c6bf !important; background: #ffffff !important; color: #173f30 !important; }
-.st-key-today_market_controls [data-testid="stImage"] { margin-top: 18px; border: 1px solid #e3ded2; border-radius: 14px; overflow: hidden; }
+.st-key-today_market_controls,
+.st-key-today_market_controls [data-testid="stCaptionContainer"],
+.st-key-today_market_controls [data-testid="stAlert"] { text-align: center; }
+.st-key-today_market_controls button { justify-content: center; text-align: center; }
+.st-key-today_market_image {
+    position: relative; min-width: 0; margin-top: 18px; padding-top: 48px;
+    border: 1px solid #e3ded2; border-radius: 14px; overflow: hidden;
+}
+.st-key-today_market_image [data-testid="stImage"] { margin: 0; pointer-events: none; }
 .st-key-today_market_controls [data-testid="stImage"] img { display: block; max-width: 100%; height: auto; }
+.st-key-today_market_image [data-testid="stElementToolbar"] { display: none; }
+.st-key-today_market_image [data-testid="stElementContainer"]:has(> [data-testid="stDownloadButton"]) {
+    position: absolute; top: 2px; right: 8px; width: auto; max-width: calc(100% - 16px); z-index: 1;
+}
+.st-key-today_market_image [data-testid="stDownloadButton"] { margin: 0; }
+.st-key-today_market_image [data-testid="stDownloadButton"] button {
+    min-height: 44px; padding: 6px 10px; border: 0; border-radius: 8px;
+    background: #ffffff; color: #535c57; font-size: 12px; font-weight: 600;
+}
 .today-market-selection { margin: 18px 0 8px; color: #173f30; font-size: 15px; font-weight: 750; text-align: center; }
 .search-section-label { margin: 2px 0 12px; color: #68716c; font-size: 13px; font-weight: 700; text-align: center; }
 [data-testid="stTextInput"] { margin: 0; }
@@ -469,12 +486,10 @@ if "today_market_selection" not in st.session_state:
     st.session_state.today_market_selection = None
 
 
-def select_today_market(report_id):
-    st.session_state.today_market_selection = report_id
-
-
-def close_today_market():
-    st.session_state.today_market_selection = None
+def toggle_today_market():
+    st.session_state.today_market_selection = (
+        None if st.session_state.today_market_selection else "all"
+    )
 
 
 MARKET_REPORT_SEED = Path(__file__).resolve().parent / "assets/market/last_successful.png"
@@ -566,20 +581,22 @@ def render_today_market():
             unsafe_allow_html=True,
         )
         st.button(
-            "오늘 시세표 보기",
+            "오늘 시세표 접기" if st.session_state.today_market_selection else "오늘 시세표 보기",
             key="today_market_overall",
             use_container_width=True,
             type="primary",
-            on_click=select_today_market,
-            args=("all",),
+            on_click=toggle_today_market,
         )
         selected_report_id = st.session_state.today_market_selection
         if selected_report_id:
             saved_report = read_saved_market_report()
-            report_area = st.empty()
+            report_metadata = st.empty()
+            with st.container(key="today_market_image"):
+                report_area = st.empty()
+                download_area = st.empty()
 
             def show_saved_report(saved):
-                with report_area.container():
+                with report_metadata.container():
                     if saved is None:
                         st.info("저장된 시세표가 없습니다. 최신 시세로 갱신해주세요.")
                         return
@@ -592,7 +609,7 @@ def render_today_market():
                     if price_basis:
                         basis = datetime.fromisoformat(price_basis)
                         st.caption(f"가격 조회 기준 · {basis.astimezone(ZoneInfo('Asia/Seoul')):%Y.%m.%d}")
-                    st.image(report_png, use_container_width=True)
+                report_area.image(report_png, use_container_width=True)
 
             # 기존 PNG를 먼저 전송해 갱신 중에도 계속 볼 수 있게 한다.
             show_saved_report(saved_report)
@@ -609,21 +626,16 @@ def render_today_market():
                 except Exception:
                     st.warning("최신 시세 갱신에 실패했습니다. 기존 시세표를 유지합니다. 잠시 후 다시 시도해주세요.")
             if saved_report is not None:
-                st.download_button(
-                    "PNG 저장",
-                    data=saved_report[0],
-                    file_name="동원_금천미트_축산_도매_시세표_A4_실시간_단가.png",
-                    mime="image/png",
-                    use_container_width=True,
-                    key="today_market_download",
-                    on_click="ignore",
-                )
-            st.button(
-                "단가표 닫기",
-                key="today_market_close",
-                use_container_width=True,
-                on_click=close_today_market,
-            )
+                with download_area.container():
+                    st.download_button(
+                        "다운로드",
+                        icon=":material/download:",
+                        data=saved_report[0],
+                        file_name="동원_금천미트_축산_도매_시세표_A4_실시간_단가.png",
+                        mime="image/png",
+                        key="today_market_download",
+                        on_click="ignore",
+                    )
 
 
 render_today_market()
@@ -640,7 +652,7 @@ html, body { margin: 0; padding: 0; background: transparent; touch-action: pan-y
 body {
     font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
                  "Noto Sans KR", "Malgun Gothic", sans-serif;
-    color: #171a18;
+    color: #171a18; text-align: center;
 }
 .signup-card {
     width: 100%; padding: 24px; border: 1px solid #e5e1d8;
@@ -649,7 +661,7 @@ body {
 .signup-title { margin: 0 0 12px; color: #12291f; font-size: 22px; font-weight: 750; line-height: 1.4; letter-spacing: -.025em; }
 .signup-description { margin: 0; color: #535c57; font-size: 14px; line-height: 1.65; word-break: keep-all; }
 .signup-entry {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
     margin: 18px 0 14px; padding: 14px; border-radius: 9px; background: #f5f4ee;
 }
 .signup-entry-text { color: #173f30; font-size: 17px; font-weight: 750; line-height: 1.5; word-break: keep-all; }
@@ -685,13 +697,13 @@ body {
 <body>
 <section class="signup-card" aria-labelledby="signup-title">
     <h2 id="signup-title" class="signup-title">금천미트 처음 이용하시나요?</h2>
-    <p class="signup-description">회원가입 시 '가입경로 상세'에 권오현을 입력해주세요.</p>
+    <p class="signup-description">회원가입 시 '가입경로 상세' 권오현 매니저 입력 필수!</p>
     <div class="signup-entry">
         <span class="signup-entry-text">가입경로 상세 → 권오현</span>
         <button class="signup-copy" type="button">권오현 복사</button>
     </div>
-    <p class="signup-note">상담 없이 바로 가입 가능하며, 필요할 때 품목·규격·단가 관련 상담을 받을 수 있습니다.</p>
-    <a class="signup-cta" href="https://www.ekcm.co.kr/" target="_blank" rel="noopener noreferrer">금천미트 가입하기</a>
+    <p class="signup-note">상담 없이 바로 가입 가능하며, 추천인 입력 시 권매니저 자동 매칭</p>
+    <a class="signup-cta" href="https://www.ekcm.co.kr/" target="_blank" rel="noopener noreferrer">금천미트 둘러보기</a>
     <p class="copy-status" role="status" aria-live="polite"></p>
 </section>
 <script>
@@ -763,7 +775,7 @@ button.addEventListener('click', async () => {
 # 선택형 카카오 상담
 st.markdown("""
 <style>
-.signup-help { padding: 0 0 12px; margin: 0; }
+.signup-help { padding: 0 0 12px; margin: 0; text-align: center; }
 .signup-help > a { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; padding: 10px 16px; border: 1px solid #fee500; border-radius: 10px; background: #fee500; color: #191919 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; }
 .signup-help > a:hover { background: #f4dc00; border-color: #f4dc00; }
 .signup-help > a:focus-visible { outline: 2px solid #191919; outline-offset: 3px; }
