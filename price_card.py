@@ -1051,7 +1051,9 @@ def _create_a4_market_report(title, groups, queried_at):
                     if draw.textlength(label, font=name_font) <= column_width - 335:
                         break
                 value = item.get("kg_price")
-                price = f"{value:,.0f}" if value is not None else "-"
+                price = f"{value:,.0f}" if value is not None else (
+                    "품절" if item.get("item_id") == "hanwoo_fat" and item.get("display_status") == "품절" else "-"
+                )
                 price_font = _a4_font(59, True)
                 if draw.textlength(label, font=name_font) + draw.textlength(price, font=price_font) > column_width - 80:
                     raise ValueError(f"품목명과 가격 표시 영역이 겹칩니다: {label}")

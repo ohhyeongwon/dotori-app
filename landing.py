@@ -499,6 +499,7 @@ def toggle_today_market():
 MARKET_REPORT_SEED = Path(__file__).resolve().parent / "assets/market/last_successful.png"
 # Streamlit 세션과 5분 가격 캐시가 끝나도 마지막 정상본은 재사용한다.
 MARKET_REPORT_CACHE = Path(tempfile.gettempdir()) / "meat_lab_market" / "last_successful.png"
+MARKET_REPORT_CACHE.parent.mkdir(parents=True, exist_ok=True)
 MARKET_REFRESH_LOGGER = logging.getLogger("meat_lab.market_refresh")
 MARKET_REFRESH_LOGGER.setLevel(logging.INFO)
 if not MARKET_REFRESH_LOGGER.handlers:
@@ -528,7 +529,10 @@ def read_saved_market_report(refresh_id=None, read_diagnostics=None):
                 path, generated_at.isoformat(), price_basis, len(png),
             )
             return png, generated_at, price_basis
-        except (OSError, ValueError, KeyError, SyntaxError):
+        except (OSError, ValueError, KeyError, SyntaxError) as error:
+            if path == MARKET_REPORT_CACHE and isinstance(error, FileNotFoundError):
+                # 새 runtime에 아직 정상본이 없는 것은 정상적인 초기 상태다.
+                continue
             MARKET_REFRESH_LOGGER.warning(
                 "id=%s stage=read_png status=failed path=%s", refresh_id, path, exc_info=True,
             )
@@ -597,17 +601,22 @@ def _refresh_market_report_with_logs(refresh_id):
         )
     # API 오류가 예외 대신 빈 가격으로 반환되어도 정상본을 덮어쓰지 않는다.
     items = [item for group in report["groups"] for item in group["items"]]
+    sold_out_items = [
+        item for item in items
+        if item.get("item_id") == "hanwoo_fat" and item.get("availability_status") == "sold_out"
+    ]
     missing_items = [
         {"item_id": item.get("item_id"), "item_name": item.get("item_name")}
-        for item in items if item.get("kg_price") is None
+        for item in items if item.get("kg_price") is None and item not in sold_out_items
     ]
     source_errors = sum(d.get("status") == "error" for d in report.get("diagnostics", []))
     MARKET_REFRESH_LOGGER.info(
-        "id=%s stage=validate_items status=%s expected_count=58 actual_count=%s count_matches=%s priced_count=%s source_errors=%s missing_items=%s",
+        "id=%s stage=validate_items status=%s expected_count=58 actual_count=%s count_matches=%s priced_count=%s source_errors=%s missing_items=%s sold_out_items=%s",
         refresh_id, "success" if items and not missing_items and not source_errors else "failed",
-        len(items), len(items) == 58, len(items) - len(missing_items), source_errors, missing_items,
+        len(items), len(items) == 58, sum(item.get("kg_price") is not None for item in items), source_errors, missing_items,
+        [item["item_id"] for item in sold_out_items],
     )
-    if not items or any(item.get("kg_price") is None for item in items):
+    if not items or missing_items:
         raise ValueError("시세 조회가 완료되지 않았습니다.")
     if any(d.get("status") == "error" for d in report.get("diagnostics", [])):
         raise ValueError("시세 조회에 실패했습니다.")
@@ -617,7 +626,7 @@ def _refresh_market_report_with_logs(refresh_id):
             "category_name": group["category_name"],
             "items": [
                 {key: item.get(key) for key in (
-                    "item_id", "item_name", "storage_status", "kg_price"
+                    "item_id", "item_name", "storage_status", "kg_price", "display_status"
                 )}
                 for item in group["items"]
             ],

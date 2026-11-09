@@ -1198,6 +1198,53 @@ next(group for group in TODAY_MARKET_CATEGORIES
      if group["category_id"] == "sliced_meat")["category_name"] = "세절/기타"
 
 
+def _confirm_hanwoo_fat_sold_out(lookup, diagnostics):
+    """확인된 두태지방 상품의 정상 품절만 허용하며 불명확한 누락은 유지한다."""
+    from decimal import Decimal, InvalidOperation
+    from market_api import fetch_category_products, fetch_goods_products
+
+    result = {"source": "hanwoo_fat_availability", "status": "missing"}
+    if not diagnostics or any(d.get("status") != "ok" for d in diagnostics):
+        return result
+    response = fetch_category_products(lookup["category_no"])
+    if response["status"] != "ok":
+        return {**result, "status": "error"}
+    rows = response["items"]
+    # 품절 시 category API는 goodsNo 없는 품목 행을 반환한다.
+    # 다른 상품이나 판매 가능/불명확한 행이 있으면 품절로 간주하지 않는다.
+    try:
+        if not rows or any(
+            row.get("artcCd") != "1015120086"
+            or row.get("goodsNo") not in (None, "27224014")
+            or not all(word in str(row.get("goodsNm") or "") for word in ("한우", "두태지방"))
+            or row.get("saleStatCd") not in (None, "20")
+            or row.get("dispYn") not in (None, "N")
+            or Decimal(str(row.get("stkQty"))) != 0
+            for row in rows
+        ):
+            return result
+        fixed = fetch_goods_products(("27224014",))
+        if fixed["status"] != "ok":
+            return {**result, "status": "error"}
+        if len(fixed["items"]) != 1:
+            return result
+        product = fixed["items"][0]
+        if (
+            str(product.get("goodsNo")) == "27224014"
+            and product.get("artcCd") == "1015120086"
+            and all(word in str(product.get("goodsNm") or "") for word in ("한우", "두태지방"))
+            and product.get("plspartNm") == "지방"
+            and product.get("strgMthdGbNm") == "냉동"
+            and product.get("saleStatCd") == "20"
+            and product.get("dispYn") == "N"
+            and Decimal(str(product.get("stkQty"))) == 0
+        ):
+            return {**result, "status": "sold_out", "goods_no": "27224014"}
+    except (InvalidOperation, ValueError, TypeError):
+        return result
+    return result
+
+
 def get_today_market_report(category_id=None, include_live_prices=False):
     """종합 또는 선택 카테고리 단가표 구조를 선택적으로 실시간 가격과 합친다."""
     if category_id is None:
@@ -1264,6 +1311,15 @@ def get_today_market_report(category_id=None, include_live_prices=False):
         product = products_by_item.get(item["item_id"])
         if product is None:
             item["display_status"] = "현재 조회 불가"
+            if item["item_id"] == "hanwoo_fat":
+                source_diagnostics = [
+                    diagnostic for source_item, diagnostic in zip(connected_items, result["diagnostics"])
+                    if source_item["item_id"] == "hanwoo_fat"
+                ]
+                availability = _confirm_hanwoo_fat_sold_out(item["lookup"], source_diagnostics)
+                result["diagnostics"].append(availability)
+                if availability["status"] == "sold_out":
+                    item.update({"kg_price": None, "display_status": "품절", "availability_status": "sold_out"})
             continue
         item.update({
             "kg_price": product.get("kg_price_rounded", round(product["kg_price"])),
