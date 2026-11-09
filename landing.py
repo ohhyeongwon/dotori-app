@@ -7,6 +7,8 @@ from io import BytesIO
 from pathlib import Path
 import os
 import tempfile
+import logging
+from uuid import uuid4
 
 from PIL import Image, PngImagePlugin
 
@@ -497,9 +499,18 @@ def toggle_today_market():
 MARKET_REPORT_SEED = Path(__file__).resolve().parent / "assets/market/last_successful.png"
 # Streamlit 세션과 5분 가격 캐시가 끝나도 마지막 정상본은 재사용한다.
 MARKET_REPORT_CACHE = Path(tempfile.gettempdir()) / "meat_lab_market" / "last_successful.png"
+MARKET_REFRESH_LOGGER = logging.getLogger("meat_lab.market_refresh")
+MARKET_REFRESH_LOGGER.setLevel(logging.INFO)
+if not MARKET_REFRESH_LOGGER.handlers:
+    _market_log_handler = logging.StreamHandler()
+    _market_log_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [MARKET_REFRESH] pid=%(process)d thread=%(threadName)s %(message)s"
+    ))
+    MARKET_REFRESH_LOGGER.addHandler(_market_log_handler)
+MARKET_REFRESH_LOGGER.propagate = False
 
 
-def read_saved_market_report():
+def read_saved_market_report(refresh_id=None, read_diagnostics=None):
     for path in (MARKET_REPORT_CACHE, MARKET_REPORT_SEED):
         try:
             png = path.read_bytes()
@@ -509,15 +520,30 @@ def read_saved_market_report():
                 if price_basis:
                     datetime.fromisoformat(price_basis)
                 image.verify()
+            if read_diagnostics is not None:
+                read_diagnostics["source"] = "runtime" if path == MARKET_REPORT_CACHE else "repo_seed"
+            MARKET_REFRESH_LOGGER.info(
+                "id=%s stage=read_png status=success source=%s path=%s generated_at=%s price_basis=%s bytes=%s",
+                refresh_id, "runtime" if path == MARKET_REPORT_CACHE else "repo_seed",
+                path, generated_at.isoformat(), price_basis, len(png),
+            )
             return png, generated_at, price_basis
         except (OSError, ValueError, KeyError, SyntaxError):
+            MARKET_REFRESH_LOGGER.warning(
+                "id=%s stage=read_png status=failed path=%s", refresh_id, path, exc_info=True,
+            )
             continue
+    MARKET_REFRESH_LOGGER.error("id=%s stage=read_png status=no_valid_file", refresh_id)
     return None
 
 
-def save_market_report(png, generated_at, price_basis):
+def save_market_report(png, generated_at, price_basis, refresh_id=None):
     # 날짜와 PNG를 한 파일로 원자적으로 교체한다. 실패하면 기존 파일은 그대로 남는다.
     output = BytesIO()
+    MARKET_REFRESH_LOGGER.info(
+        "id=%s stage=save_png status=start path=%s generated_at=%s price_basis=%s",
+        refresh_id, MARKET_REPORT_CACHE, generated_at.isoformat(), price_basis.isoformat(),
+    )
     with Image.open(BytesIO(png)) as image:
         metadata = PngImagePlugin.PngInfo()
         metadata.add_text("generated_at", generated_at.isoformat())
@@ -526,22 +552,61 @@ def save_market_report(png, generated_at, price_basis):
     MARKET_REPORT_CACHE.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=MARKET_REPORT_CACHE.parent, suffix=".png", delete=False) as temp:
         temp_path = Path(temp.name)
+        MARKET_REFRESH_LOGGER.info(
+            "id=%s stage=temp_write status=start temp_path=%s destination=%s",
+            refresh_id, temp_path, MARKET_REPORT_CACHE,
+        )
         try:
             temp.write(output.getvalue())
         except BaseException:
+            MARKET_REFRESH_LOGGER.exception("id=%s stage=temp_write status=failed path=%s", refresh_id, temp_path)
             temp.close()
             temp_path.unlink(missing_ok=True)
             raise
     try:
+        MARKET_REFRESH_LOGGER.info("id=%s stage=os_replace status=start path=%s", refresh_id, MARKET_REPORT_CACHE)
         os.replace(temp_path, MARKET_REPORT_CACHE)
+        MARKET_REFRESH_LOGGER.info("id=%s stage=os_replace status=success path=%s", refresh_id, MARKET_REPORT_CACHE)
+        MARKET_REFRESH_LOGGER.info(
+            "id=%s stage=saved_file exists=%s path=%s",
+            refresh_id, MARKET_REPORT_CACHE.exists(), MARKET_REPORT_CACHE,
+        )
+    except Exception:
+        MARKET_REFRESH_LOGGER.exception("id=%s stage=os_replace status=failed path=%s", refresh_id, MARKET_REPORT_CACHE)
+        raise
     finally:
         temp_path.unlink(missing_ok=True)
 
 
-def refresh_market_report():
+def refresh_market_report(refresh_id=None):
+    try:
+        _refresh_market_report_with_logs(refresh_id)
+    except Exception:
+        MARKET_REFRESH_LOGGER.exception("id=%s stage=refresh_pipeline status=failed", refresh_id)
+        raise
+
+
+def _refresh_market_report_with_logs(refresh_id):
+    MARKET_REFRESH_LOGGER.info("id=%s stage=api_query status=start", refresh_id)
     report = get_today_market_report(None, include_live_prices=True)
+    MARKET_REFRESH_LOGGER.info("id=%s stage=api_query status=complete queried_at=%s", refresh_id, report.get("queried_at"))
+    for index, diagnostic in enumerate(report.get("diagnostics", [])):
+        MARKET_REFRESH_LOGGER.info(
+            "id=%s stage=source_result index=%s diagnostic=%s",
+            refresh_id, index, diagnostic,
+        )
     # API 오류가 예외 대신 빈 가격으로 반환되어도 정상본을 덮어쓰지 않는다.
     items = [item for group in report["groups"] for item in group["items"]]
+    missing_items = [
+        {"item_id": item.get("item_id"), "item_name": item.get("item_name")}
+        for item in items if item.get("kg_price") is None
+    ]
+    source_errors = sum(d.get("status") == "error" for d in report.get("diagnostics", []))
+    MARKET_REFRESH_LOGGER.info(
+        "id=%s stage=validate_items status=%s expected_count=58 actual_count=%s count_matches=%s priced_count=%s source_errors=%s missing_items=%s",
+        refresh_id, "success" if items and not missing_items and not source_errors else "failed",
+        len(items), len(items) == 58, len(items) - len(missing_items), source_errors, missing_items,
+    )
     if not items or any(item.get("kg_price") is None for item in items):
         raise ValueError("시세 조회가 완료되지 않았습니다.")
     if any(d.get("status") == "error" for d in report.get("diagnostics", [])):
@@ -560,12 +625,14 @@ def refresh_market_report():
         for group in report["groups"]
     ]
     price_basis = report.get("queried_at") or datetime.now(ZoneInfo("Asia/Seoul"))
+    MARKET_REFRESH_LOGGER.info("id=%s stage=render_png status=start price_basis=%s", refresh_id, price_basis)
     png = create_market_report_png(
         "실시간 축산 도매 시세표", render_groups,
         queried_at=price_basis,
         canvas_size=OVERALL_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
     )
-    save_market_report(png, datetime.now(ZoneInfo("Asia/Seoul")), price_basis)
+    MARKET_REFRESH_LOGGER.info("id=%s stage=render_png status=complete bytes=%s", refresh_id, len(png))
+    save_market_report(png, datetime.now(ZoneInfo("Asia/Seoul")), price_basis, refresh_id)
 
 
 def render_market_report_download(report_png, snapshot_at):
@@ -632,16 +699,42 @@ def render_today_market():
             # 이미지와 다운로드를 모두 먼저 전송한 뒤 자동 조회를 시작한다.
             show_saved_report(saved_report)
             if st.session_state.pop("today_market_refresh_pending", False):
+                refresh_id = uuid4().hex[:12]
+                refresh_stage = "refresh_pipeline"
+                MARKET_REFRESH_LOGGER.info("id=%s stage=auto_refresh status=start", refresh_id)
                 try:
                     # API 내부의 기존 5분 캐시를 그대로 사용한다.
-                    refresh_market_report()
-                    latest_report = read_saved_market_report()
+                    refresh_market_report(refresh_id)
+                    refresh_stage = "read_after_save"
+                    MARKET_REFRESH_LOGGER.info("id=%s stage=read_after_save status=start", refresh_id)
+                    read_diagnostics = {}
+                    latest_report = read_saved_market_report(refresh_id, read_diagnostics)
+                    runtime_read_ok = latest_report is not None and read_diagnostics.get("source") == "runtime"
+                    MARKET_REFRESH_LOGGER.log(
+                        logging.INFO if runtime_read_ok else logging.ERROR,
+                        "id=%s stage=read_after_save status=%s source=%s generated_at=%s",
+                        refresh_id, "success" if runtime_read_ok else "failed", read_diagnostics.get("source"),
+                        latest_report[1].isoformat() if latest_report is not None else None,
+                    )
+                    refresh_stage = "display_latest"
+                    report_changed = latest_report is not None and (
+                        saved_report is None or latest_report[0] != saved_report[0]
+                    )
                     if latest_report is not None and (
                         saved_report is None or latest_report[0] != saved_report[0]
                     ):
                         saved_report = latest_report
                         show_saved_report(saved_report)
+                    MARKET_REFRESH_LOGGER.log(
+                        logging.INFO if runtime_read_ok else logging.ERROR,
+                        "id=%s stage=auto_refresh status=%s changed=%s",
+                        refresh_id, "success" if runtime_read_ok else "failed",
+                        report_changed,
+                    )
                 except Exception:
+                    MARKET_REFRESH_LOGGER.exception(
+                        "id=%s stage=auto_refresh status=failed failed_stage=%s", refresh_id, refresh_stage,
+                    )
                     st.toast("최신 조회에 실패해 기존 시세표를 표시합니다.")
 
 

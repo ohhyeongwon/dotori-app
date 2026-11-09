@@ -10,6 +10,7 @@ import streamlit as st
 
 
 LOGGER = logging.getLogger(__name__)
+MARKET_REFRESH_LOGGER = logging.getLogger("meat_lab.market_refresh")
 GEUMCHEON_CATEGORY_URL = "https://gw.ekcm.co.kr/api/goods/v1/goods/dispGoodsList"
 GEUMCHEON_GOODS_URL = "https://gw.ekcm.co.kr/api/goods/v1/goods/goodsList"
 REQUEST_TIMEOUT_SECONDS = 8
@@ -133,6 +134,9 @@ def fetch_category_products(category_no):
         while total_count is None or len(unique_items) < total_count:
             request_body = _category_request_body(category_no)
             request_body["pageNo"] = page_number
+            MARKET_REFRESH_LOGGER.info(
+                "stage=category_request status=start category=%s page=%s", category_no, page_number,
+            )
             response = requests.post(
                 GEUMCHEON_CATEGORY_URL,
                 json=request_body,
@@ -142,6 +146,10 @@ def fetch_category_products(category_no):
             payload = response.json().get("payload")
             if not isinstance(payload, list):
                 raise ValueError("상품 배열이 없습니다.")
+            MARKET_REFRESH_LOGGER.info(
+                "stage=category_request status=success category=%s page=%s http_status=%s returned_count=%s",
+                category_no, page_number, response.status_code, len(payload),
+            )
             if not payload:
                 break
             if total_count is None:
@@ -157,6 +165,9 @@ def fetch_category_products(category_no):
             "page_count": page_number,
         }
     except (requests.RequestException, ValueError, AttributeError) as error:
+        MARKET_REFRESH_LOGGER.exception(
+            "stage=category_request status=failed category=%s page=%s", category_no, page_number,
+        )
         LOGGER.warning("금천미트 카테고리 조회 실패 category_no=%s reason=%s", category_no, error)
         return {"status": "error", "items": []}
 
@@ -167,6 +178,7 @@ def fetch_goods_products(goods_numbers):
     params = [("goodsNoList", goods_no) for goods_no in goods_numbers]
     params.append(("aplyPsbMediaCd", "01"))
     try:
+        MARKET_REFRESH_LOGGER.info("stage=goods_request status=start goods_numbers=%s", goods_numbers)
         response = requests.get(
             GEUMCHEON_GOODS_URL,
             params=params,
@@ -176,8 +188,13 @@ def fetch_goods_products(goods_numbers):
         payload = response.json().get("payload")
         if not isinstance(payload, list):
             raise ValueError("상품 배열이 없습니다.")
+        MARKET_REFRESH_LOGGER.info(
+            "stage=goods_request status=success goods_numbers=%s http_status=%s returned_count=%s",
+            goods_numbers, response.status_code, len(payload),
+        )
         return {"status": "ok", "items": payload}
     except (requests.RequestException, ValueError, AttributeError) as error:
+        MARKET_REFRESH_LOGGER.exception("stage=goods_request status=failed goods_numbers=%s", goods_numbers)
         LOGGER.warning("금천미트 고정 상품 조회 실패 goods_no=%s reason=%s", goods_numbers, error)
         return {"status": "error", "items": []}
 
