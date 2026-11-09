@@ -11,6 +11,7 @@ import logging
 from uuid import uuid4
 
 from PIL import Image, PngImagePlugin
+from analytics import get_social_counts, record_event
 
 from menu_data import (
     KAKAO_CHAT_URL,
@@ -24,6 +25,17 @@ from price_card import OVERALL_REPORT_SIZE, create_market_report_png, create_pri
 # 1. 페이지 설정 및 디자인 CSS
 # =================================================================
 st.set_page_config(page_title="축산 메뉴 연구소", layout="wide")
+
+if "analytics_session_id" not in st.session_state:
+    st.session_state.analytics_session_id = str(uuid4())
+if "analytics_utm" not in st.session_state:
+    st.session_state.analytics_utm = {
+        name: st.query_params.get(name, "")[:255] or None
+        for name in ("utm_source", "utm_medium", "utm_content")
+    }
+if not st.session_state.get("analytics_page_view_recorded", False):
+    if record_event("page_view", st.session_state.analytics_session_id, **st.session_state.analytics_utm):
+        st.session_state.analytics_page_view_recorded = True
 
 st.markdown("""
 <style>
@@ -494,6 +506,8 @@ def toggle_today_market():
         None if st.session_state.today_market_selection else "all"
     )
     st.session_state.today_market_refresh_pending = bool(st.session_state.today_market_selection)
+    if st.session_state.today_market_selection:
+        record_analytics_action("price_open")
 
 
 MARKET_REPORT_SEED = Path(__file__).resolve().parent / "assets/market/last_successful.png"
@@ -655,8 +669,67 @@ def render_market_report_download(report_png, snapshot_at):
         mime="image/png",
         # 한 번의 실행 중 기존 PNG와 새 PNG를 순서대로 렌더링할 수 있게 구분한다.
         key=f"today_market_download_{sha256(report_png).hexdigest()}",
-        on_click="ignore",
+        on_click=record_analytics_action,
+        args=("price_download",),
     )
+
+
+def record_analytics_action(event_type):
+    return record_event(event_type, st.session_state.analytics_session_id, **st.session_state.analytics_utm)
+
+
+def like_analytics():
+    if st.session_state.get("analytics_liked", False):
+        return
+    if record_event("like", st.session_state.analytics_session_id, **st.session_state.analytics_utm):
+        st.session_state.analytics_liked = True
+
+
+def share_analytics():
+    # 공유 완료 여부가 아닌 버튼 클릭을 기록한다. DB 장애에도 링크는 제공한다.
+    st.session_state.analytics_share_visible = True
+    record_event("share", st.session_state.analytics_session_id, **st.session_state.analytics_utm)
+
+
+def render_analytics_social():
+    counts = get_social_counts()
+
+    def count(name):
+        return f"{counts[name]:,}" if counts is not None else "—"
+
+    with st.container(key="analytics_social"):
+        st.markdown("""
+<style>
+.st-key-analytics_social { max-width: 300px; margin: 0 auto 8px; min-width: 0; }
+.st-key-analytics_social .analytics-visitors { margin: 0; color: #747c77; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.st-key-analytics_social [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px; }
+.st-key-analytics_social [data-testid="stColumn"] { width: 0 !important; min-width: 0; flex: 1 1 0 !important; }
+.st-key-today_market_controls .st-key-analytics_social [data-testid="stButton"] button { min-height: 36px; padding: 4px 6px; border: 0; background: transparent; color: #606762; font-size: 13px; }
+.st-key-analytics_social [data-testid="stButton"] button p { font-size: 13px; overflow-wrap: anywhere; }
+.st-key-analytics_social [data-testid="stButton"] button:disabled { color: #173f30; opacity: 1; }
+.st-key-analytics_social [data-testid="stBaseButton-elementToolbar"] { visibility: visible; }
+.st-key-analytics_social [data-testid="stCode"] > div { opacity: 1; visibility: visible; }
+</style>
+""", unsafe_allow_html=True)
+        st.markdown(
+            f'<p class="analytics-visitors">오늘 {count("today_visitors")}명 · 누적 {count("total_visitors")}명</p>',
+            unsafe_allow_html=True,
+        )
+        liked = st.session_state.get("analytics_liked", False)
+        like_column, share_column = st.columns(2, gap="small")
+        with like_column:
+            st.button(
+                f'👍 {"좋아요 완료" if liked else "좋아요"} {count("likes")}',
+                key="analytics_like", disabled=liked, on_click=like_analytics,
+                use_container_width=True,
+            )
+        with share_column:
+            st.button(
+                f'공유 {count("shares")}', key="analytics_share", on_click=share_analytics,
+                use_container_width=True,
+            )
+        if st.session_state.get("analytics_share_visible", False):
+            st.code(st.context.url or "https://dotori-dapanda.streamlit.app/", language=None, wrap_lines=True)
 
 
 @st.fragment
@@ -673,6 +746,7 @@ def render_today_market():
             """,
             unsafe_allow_html=True,
         )
+        render_analytics_social()
         st.button(
             "오늘 시세표 접기" if st.session_state.today_market_selection else "오늘 시세표 보기",
             key="today_market_overall",
@@ -750,7 +824,7 @@ def render_today_market():
 render_today_market()
 
 # 신규가입 안내 — 상담 없이 공식몰로 바로 이동
-st.iframe("""
+signup_html = """
 <!doctype html>
 <html lang="ko">
 <head>
@@ -764,8 +838,8 @@ body {
     color: #171a18; text-align: center;
 }
 .signup-card {
-    width: 100%; padding: 24px; border: 1px solid #e5e1d8;
-    border-radius: 12px; background: #ffffff; position: relative;
+    width: 100%; padding: 24px; border: 0;
+    background: #ffffff; position: relative;
 }
 .signup-title { margin: 0 0 12px; color: #12291f; font-size: 22px; font-weight: 750; line-height: 1.4; letter-spacing: -.025em; }
 .signup-description { margin: 0; color: #535c57; font-size: 14px; line-height: 1.65; word-break: keep-all; }
@@ -812,7 +886,6 @@ body {
         <button class="signup-copy" type="button">권오현 복사</button>
     </div>
     <p class="signup-note">상담 없이 바로 가입 가능하며, 추천인 입력 시 권매니저 자동 매칭</p>
-    <a class="signup-cta" href="https://www.ekcm.co.kr/" target="_blank" rel="noopener noreferrer">금천미트 둘러보기</a>
     <p class="copy-status" role="status" aria-live="polite"></p>
 </section>
 <script>
@@ -879,22 +952,41 @@ button.addEventListener('click', async () => {
 </script>
 </body>
 </html>
-""", height="content")
+"""
+
+st.markdown("""
+<style>
+.st-key-signup_analytics_panel { border: 1px solid #e5e1d8; border-radius: 12px; overflow: hidden; padding-bottom: 24px; }
+.st-key-signup_analytics_panel [data-testid="stVerticalBlock"] { gap: 0; }
+.st-key-analytics_signup { margin: 0 24px; width: calc(100% - 48px) !important; }
+.st-key-analytics_signup a { width: 100%; min-height: 50px; border: 0; border-radius: 10px; background: #173f30; color: #ffffff !important; font-weight: 700; text-decoration: none; }
+.st-key-analytics_signup a:hover { background: #123326; }
+@media (max-width: 700px) {
+    .st-key-signup_analytics_panel { padding-bottom: 14px; }
+    .st-key-analytics_signup { margin: 0 18px; width: calc(100% - 36px) !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+with st.container(key="signup_analytics_panel"):
+    st.iframe(signup_html, height="content")
+    st.link_button(
+        "금천미트 둘러보기", "https://www.ekcm.co.kr/", key="analytics_signup",
+        on_click=record_analytics_action, args=("signup_click",), use_container_width=True,
+    )
 
 # 선택형 카카오 상담
 st.markdown("""
 <style>
-.signup-help { padding: 0 0 12px; margin: 0; text-align: center; }
-.signup-help > a { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; padding: 10px 16px; border: 1px solid #fee500; border-radius: 10px; background: #fee500; color: #191919 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; }
-.signup-help > a:hover { background: #f4dc00; border-color: #f4dc00; }
-.signup-help > a:focus-visible { outline: 2px solid #191919; outline-offset: 3px; }
-.kakao-bubble { position: relative; flex: 0 0 20px; width: 20px; height: 15px; border-radius: 50%; background: #191919; }
-.kakao-bubble::after { content: ""; position: absolute; left: 3px; bottom: -3px; width: 6px; height: 6px; background: #191919; transform: skewY(-35deg); }
+.st-key-analytics_kakao { margin-bottom: 12px; }
+.st-key-analytics_kakao a { position: relative; display: flex; justify-content: center; gap: 9px; width: 100%; min-height: 52px; padding: 10px 16px; border: 1px solid #fee500; border-radius: 10px; background: #fee500; color: #191919 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; }
+.st-key-analytics_kakao a:hover { background: #f4dc00; border-color: #f4dc00; }
+.st-key-analytics_kakao a::before { content: ""; position: absolute; left: calc(50% - 86px); width: 20px; height: 15px; border-radius: 50%; background: #191919; }
 </style>
-<div class="signup-help">
-    <a href="https://open.kakao.com/o/sG85euyi" target="_blank" rel="noopener noreferrer"><span class="kakao-bubble" aria-hidden="true"></span><span>1:1 카카오톡 상담</span></a>
-</div>
 """, unsafe_allow_html=True)
+st.link_button(
+    "1:1 카카오톡 상담", KAKAO_CHAT_URL, key="analytics_kakao",
+    on_click=record_analytics_action, args=("kakao_click",), use_container_width=True,
+)
 
 # 재사용을 위해 검색 기능을 보관한다. 메인 화면에서는 호출하지 않는다.
 def render_menu_search():
