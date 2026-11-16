@@ -1065,11 +1065,18 @@ def _create_a4_market_report(title, groups, queried_at):
                 y += block_gap
         if y > height - 100:
             raise ValueError("A4 단가표 표시 영역을 초과했습니다.")
-    draw.line((margin, height - 100, width - margin, height - 100), fill="#ccd3c8", width=2)
-    draw.text((margin, height - 58), "사이트 회원가입 시 ‘영업사원 소개’에 권오현 입력 시 세부 상담 매칭",
-              font=_a4_font(31), fill="#526158", anchor="lm")
-    draw.text((width - margin, height - 58), f"총 {sum(len(g['items']) for g in groups)}개 품목",
-              font=_a4_font(32, True), fill=ink, anchor="rm")
+    # 가격표 좌표를 유지하고, 남은 하단 공간에 차분한 3단계 가입 안내를 배치한다.
+    footer_top = height - 178
+    draw.rounded_rectangle((margin, footer_top, width - margin, height - 32),
+                           radius=12, fill="#f5f4f0")
+    draw.text((width / 2, footer_top + 28), "금천미트 신규 가입 시",
+              font=_a4_font(32), fill="#526158", anchor="mm")
+    draw.text((width / 2, footer_top + 76), "가입경로 상세 → 권오현",
+              font=_a4_font(48, True), fill=ink, anchor="mm")
+    draw.text((width / 2, footer_top + 122), "담당 매니저 자동 연결 · 시세·상품 문의 가능",
+              font=_a4_font(26), fill="#69736c", anchor="mm")
+    draw.text((width - margin - 24, footer_top + 28), f"총 {sum(len(g['items']) for g in groups)}개 품목",
+              font=_a4_font(24), fill="#69736c", anchor="rm")
     output = BytesIO()
     canvas.save(output, format="PNG", dpi=(300, 300), optimize=True)
     return output.getvalue()
