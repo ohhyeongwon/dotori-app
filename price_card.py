@@ -985,6 +985,51 @@ def _a4_font(size, bold=False):
     return font
 
 
+def _draw_a4_signup_cta(canvas, draw, item_count):
+    """공식 원본 자산으로 승인된 흰색 서비스 안내 카드를 그린다."""
+    ink, body, primary = "#181819", "#44444A", "#90253F"
+    box = (104, 3330, 2376, 3476)
+    draw.rounded_rectangle(box, radius=20, fill="white", outline=body, width=1)
+
+    def paste_asset(name, xy, max_size):
+        with Image.open(ASSET_DIR / "cta" / name) as source:
+            asset = source.convert("RGBA")
+        fitted = ImageOps.contain(asset, max_size, Image.Resampling.LANCZOS)
+        canvas.paste(fitted, xy, fitted)
+
+    draw.text((144, 3353), "금천미트 처음이신가요?",
+              font=_a4_font(27, True), fill=ink, anchor="lm")
+    paste_asset("naver.png", (144, 3389), (110, 23))
+    paste_asset("google-play.png", (288, 3381), (144, 36))
+    paste_asset("app-store.png", (466, 3382), (36, 36))
+    draw.text((537, 3400), "→", font=_a4_font(27), fill=body, anchor="mm")
+    paste_asset("geumcheon-app.png", (573, 3376), (48, 48))
+    draw.text((144, 3448), "네이버 · 앱스토어에서 ‘금천미트’ 검색",
+              font=_a4_font(25), fill=body, anchor="lm")
+
+    main_segments = [("가입경로 상세 → ", ink), ("권오현", primary)]
+    main_font = _a4_font(58, True)
+    main_width = sum(draw.textlength(text, font=main_font) for text, _ in main_segments)
+    center = 1370
+    x = center - main_width / 2
+    for text, color in main_segments:
+        draw.text((x, 3391), text, font=main_font, fill=color, anchor="lm")
+        x += draw.textlength(text, font=main_font)
+    draw.text((center, 3443), "가입 후 직접 구매 시",
+              font=_a4_font(28), fill=body, anchor="mm")
+
+    symbol_path = Path(r"C:\Windows\Fonts\seguisym.ttf")
+    check_font = ImageFont.truetype(str(symbol_path), 26) if symbol_path.exists() else _a4_font(26)
+    for label, y in [("시세 안내", 3359), ("상품 안내", 3400), ("프로모션 안내", 3441)]:
+        draw.text((1932, y), "✓", font=check_font, fill=body, anchor="lm")
+        draw.text((1971, y), label, font=_a4_font(26), fill=body, anchor="lm")
+    # 기존 A4 표시 품목 수를 그대로 유지한다 (현재 구성: 총 57개 품목).
+    draw.text((2352, 3358), f"총 {item_count}개 품목",
+              font=_a4_font(24), fill=body, anchor="rm")
+    for x in (866, 1864):
+        draw.line((x, 3360, x, 3451), fill="#e2e5df", width=1)
+
+
 def _create_a4_market_report(title, groups, queried_at):
     """데이터를 변경하지 않고 A4 300dpi 좌표에서 직접 그린다."""
     groups = [{**group, "items": [item for item in group["items"]
@@ -1065,18 +1110,7 @@ def _create_a4_market_report(title, groups, queried_at):
                 y += block_gap
         if y > height - 100:
             raise ValueError("A4 단가표 표시 영역을 초과했습니다.")
-    # 가격표 좌표를 유지하고, 남은 하단 공간에 차분한 3단계 가입 안내를 배치한다.
-    footer_top = height - 178
-    draw.rounded_rectangle((margin, footer_top, width - margin, height - 32),
-                           radius=12, fill="#f5f4f0")
-    draw.text((width / 2, footer_top + 28), "금천미트 신규 가입 시",
-              font=_a4_font(32), fill="#526158", anchor="mm")
-    draw.text((width / 2, footer_top + 76), "가입경로 상세 → 권오현",
-              font=_a4_font(48, True), fill=ink, anchor="mm")
-    draw.text((width / 2, footer_top + 122), "담당 매니저 자동 연결 · 시세·상품 문의 가능",
-              font=_a4_font(26), fill="#69736c", anchor="mm")
-    draw.text((width - margin - 24, footer_top + 28), f"총 {sum(len(g['items']) for g in groups)}개 품목",
-              font=_a4_font(24), fill="#69736c", anchor="rm")
+    _draw_a4_signup_cta(canvas, draw, sum(len(g["items"]) for g in groups))
     output = BytesIO()
     canvas.save(output, format="PNG", dpi=(300, 300), optimize=True)
     return output.getvalue()

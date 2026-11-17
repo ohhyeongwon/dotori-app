@@ -1,0 +1,18 @@
+{
+  "naver.png": {
+    "url": "https://www.navercorp.com/img/pc/logo-type-green.png",
+    "sha256": "23712df0d23f17c3471c7854f910542b44c8479b78737c774983d270b2b38794"
+  },
+  "google-play.png": {
+    "url": "https://ssl.gstatic.com/android/market_images/web/play_prism_hlock_m.png",
+    "sha256": "2b27d57bc42332884adb3b8ae1c26e0c7f06aa5967fae86fef279911086558b3"
+  },
+  "app-store.png": {
+    "url": "https://www.apple.com/v/app-store/c/images/overview/icon_appstore__ev0z770zyxoy_large_2x.png",
+    "sha256": "679e634996b604e886157ac83d9e128a5eb8ffdfd4192eb120e879f367b6b417"
+  },
+  "geumcheon-app.png": {
+    "url": "https://play-lh.googleusercontent.com/jHDzA476nFnT6KJT0CPMtj_SPPry4llJLWrAe0dpXx8zrrDBvuJFKWdoaPKKmMsoGnmOIC5M4Gg34dajDdgwbQ=w240-h480",
+    "sha256": "c1ea93b0ec471ef59f17ddefe9c186b5f379208b5d47431e7ec28c0b0c9f26e5"
+  }
+}
