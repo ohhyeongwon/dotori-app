@@ -24,7 +24,7 @@ from price_card import OVERALL_REPORT_SIZE, create_market_report_png, create_pri
 # =================================================================
 # 1. 페이지 설정 및 디자인 CSS
 # =================================================================
-st.set_page_config(page_title="축산 메뉴 연구소", layout="wide")
+st.set_page_config(page_title="도토리다판다 | 실시간 축산 도매 시세표", layout="wide")
 
 if "analytics_session_id" not in st.session_state:
     st.session_state.analytics_session_id = str(uuid4())
@@ -45,11 +45,11 @@ st.markdown("""
     font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
                  "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
-.stApp { background: #ffffff; color: #171a18; overflow-x: clip; }
+.stApp { background: #f7f8f7; color: #171a18; }
 .stApp *, .stApp *::before, .stApp *::after { box-sizing: border-box; }
 .block-container {
-    width: 100%; max-width: 760px; min-width: 0; margin-left: auto; margin-right: auto;
-    padding-top: 1.1rem; padding-bottom: 5rem;
+    width: 100%; max-width: 720px; min-width: 0; margin-left: auto; margin-right: auto;
+    padding: 32px 24px 28px;
 }
 .hero-copy { margin-top: 108px; margin-bottom: 24px; text-align: center; }
 .hero-title {
@@ -61,10 +61,16 @@ st.markdown("""
     line-height: 1.65; letter-spacing: -0.01em;
 }
 .hero-mobile-break { display: none; }
-.today-market { margin: 30px 0 16px; }
-.today-market-heading { margin-bottom: 18px; text-align: center; }
-.today-market-title { margin: 0; color: #12291f; font-size: 23px !important; font-weight: 780 !important; line-height: 1.35 !important; letter-spacing: -.025em; }
-.today-market-caption { margin: 7px auto 0; max-width: 540px; color: #747c77; font-size: 14px !important; line-height: 1.6 !important; }
+.today-market { margin: 0; }
+.today-market-heading { margin-bottom: 0; text-align: center; }
+.today-market-heading .brand-label { margin: 0 0 6px; padding: 0; color: #526259; font-size: 13px; line-height: 1.5; font-weight: 700; letter-spacing: .04em; }
+.today-market-title { margin: 0; padding: 0 !important; color: #12291f; font-size: 34px !important; font-weight: 780 !important; line-height: 1.35 !important; letter-spacing: -.04em; word-break: keep-all; }
+.today-market-caption { margin: 12px auto 0; max-width: 540px; color: #69746d; font-size: 14px !important; line-height: 1.6 !important; }
+.st-key-today_market_controls { margin-bottom: 0; }
+.service-footer { margin-top: 12px; padding-top: 20px; border-top: 1px solid #e1e6e2; color: #7a837d; font-size: 11px; line-height: 1.8; text-align: center; word-break: keep-all; }
+.service-footer p { margin: 0; }
+.service-footer .service-operator { margin-bottom: 10px; color: #657168; font-size: 12px; }
+.service-footer .service-operator strong { font-weight: 650; }
 .hero-copy, .today-market-heading, .search-section-label,
 .st-key-today_market_controls, [data-testid="stHorizontalBlock"],
 [data-testid="column"], [data-testid="stTextInput"], [data-testid="stButton"] {
@@ -74,7 +80,9 @@ st.markdown("""
     max-width: 100%; overflow-wrap: anywhere;
 }
 .st-key-today_market_controls [data-testid="stButton"] button { min-height: 48px; border-radius: 11px; font-size: 14px; font-weight: 700; }
-.st-key-today_market_overall button { min-height: 58px !important; border-color: #173f30 !important; background: #173f30 !important; color: #ffffff !important; font-size: 16px !important; }
+.st-key-today_market_overall button, .st-key-today_market_overall_close button { min-height: 56px !important; border: 1px solid #173f30 !important; border-radius: 12px !important; background: #173f30 !important; color: #ffffff !important; font-size: 16px !important; font-weight: 750; box-shadow: none; }
+.st-key-today_market_overall button:hover, .st-key-today_market_overall_close button:hover { background: #123326 !important; }
+.st-key-today_market_overall button p, .st-key-today_market_overall_close button p { font-size: 16px; font-weight: 750; }
 .st-key-today_market_toggle button { min-height: 52px !important; border-color: #b9c6bf !important; background: #ffffff !important; color: #173f30 !important; }
 .st-key-today_market_controls,
 .st-key-today_market_controls [data-testid="stCaptionContainer"],
@@ -82,7 +90,7 @@ st.markdown("""
 .st-key-today_market_controls button { justify-content: center; text-align: center; }
 .st-key-today_market_image {
     position: relative; min-width: 0; margin-top: 18px; padding-top: 48px;
-    border: 1px solid #e3ded2; border-radius: 14px; overflow: hidden;
+    border: 1px solid #e0e5e1; border-radius: 16px; overflow: hidden; background: #ffffff;
 }
 .st-key-today_market_image [data-testid="stImage"] { margin: 0; pointer-events: none; }
 .st-key-today_market_controls [data-testid="stImage"] img { display: block; max-width: 100%; height: auto; }
@@ -166,21 +174,22 @@ st.markdown("""
 }
 @media (max-width: 700px) {
     html, body, .stApp { max-width: 100%; }
-    html, body { overflow-x: clip; }
     [data-testid="stMain"] { overflow-y: auto; touch-action: pan-y pinch-zoom; }
     .block-container {
         width: 100% !important; max-width: 100% !important; min-width: 0 !important;
-        margin: 0 auto !important; padding: 0.35rem 16px 0.75rem !important;
+        margin: 0 auto !important; padding: 20px 20px 24px !important;
     }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { overscroll-behavior-y: none; }
     .hero-copy { margin-top: 42px; margin-bottom: 20px; }
     .hero-title { font-size: 27px !important; line-height: 1.35 !important; word-break: keep-all; }
     .hero-mobile-break { display: block; }
     .hero-description { margin-top: 12px; font-size: 15px !important; line-height: 1.6 !important; word-break: keep-all; }
-    .today-market { margin: 14px 0 10px; }
-    .today-market-heading { margin-bottom: 8px; }
-    .today-market-title { font-size: 22px !important; line-height: 1.4 !important; word-break: keep-all; }
-    .today-market-caption { font-size: 13px !important; line-height: 1.6 !important; word-break: keep-all; }
+    .today-market { margin: 0; }
+    .today-market-heading { margin-bottom: 0; }
+    .today-market-heading .brand-label { margin-bottom: 6px; font-size: 12px; }
+    .today-market-title { font-size: 26px !important; line-height: 1.35 !important; white-space: nowrap; }
+    .today-market-caption { margin-top: 10px; font-size: 13px !important; line-height: 1.6 !important; word-break: keep-all; }
+    .st-key-today_market_controls { margin-bottom: 0; }
     .search-section-label { margin-top: 4px; }
     [data-testid="stHorizontalBlock"] { width: 100% !important; flex-direction: column; gap: 10px; }
     [data-testid="column"] { width: 100% !important; min-width: 0 !important; flex: 1 1 100% !important; }
@@ -501,10 +510,9 @@ if "today_market_selection" not in st.session_state:
     st.session_state.today_market_selection = None
 
 
-def toggle_today_market():
-    st.session_state.today_market_selection = (
-        None if st.session_state.today_market_selection else "all"
-    )
+def toggle_today_market(open_report):
+    # 같은 접기 요청이 재처리되어도 다시 열리지 않도록 목표 상태를 지정한다.
+    st.session_state.today_market_selection = "all" if open_report else None
     st.session_state.today_market_refresh_pending = bool(st.session_state.today_market_selection)
     if st.session_state.today_market_selection:
         record_analytics_action("price_open")
@@ -700,32 +708,46 @@ def render_analytics_social():
     with st.container(key="analytics_social"):
         st.markdown("""
 <style>
-.st-key-analytics_social { max-width: 300px; margin: 0 auto 8px; min-width: 0; }
-.st-key-analytics_social .analytics-visitors { margin: 0; color: #747c77; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
-.st-key-analytics_social [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px; }
-.st-key-analytics_social [data-testid="stColumn"] { width: 0 !important; min-width: 0; flex: 1 1 0 !important; }
-.st-key-today_market_controls .st-key-analytics_social [data-testid="stButton"] button { min-height: 36px; padding: 4px 6px; border: 0; background: transparent; color: #606762; font-size: 13px; }
-.st-key-analytics_social [data-testid="stButton"] button p { font-size: 13px; overflow-wrap: anywhere; }
-.st-key-analytics_social [data-testid="stButton"] button:disabled { color: #173f30; opacity: 1; }
+.st-key-analytics_social { width: 100%; max-width: 100%; margin: 0; min-width: 0; }
+.st-key-analytics_social [data-testid="stVerticalBlock"] { gap: 0; }
+.st-key-analytics_social [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+.st-key-analytics_social [data-testid="stHorizontalBlock"] { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 0 !important; width: 100%; }
+.st-key-analytics_social [data-testid="stColumn"] { width: 100% !important; min-width: 0; }
+.st-key-analytics_social .analytics-label { margin: 0; color: #7b857e; font-size: 11px; line-height: 20px; height: 20px; text-align: center; white-space: nowrap; }
+.st-key-analytics_social .analytics-value { display: flex; align-items: center; justify-content: center; height: 32px; margin: 0; color: #606d63; font-size: 14px; font-weight: 600; line-height: 20px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.st-key-analytics_like, .st-key-analytics_share { padding: 10px 3px; }
+.st-key-today_market_controls .st-key-analytics_social [data-testid="stButton"] button { height: 32px; min-height: 32px; padding: 0 4px; border: 1px solid #dfe5e0; border-radius: 999px; background: #f0f3f0; color: #606d63; font-size: 11px; box-shadow: none; }
+.st-key-analytics_social [data-testid="stButton"] button p { margin: 0; font-size: 11px; font-weight: 600; line-height: 20px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.st-key-today_market_controls .st-key-analytics_social [data-testid="stButton"] button:hover { background: #e9eee9; border-color: #c5d0c8; }
+.st-key-analytics_social [data-testid="stButton"] button:focus-visible { outline: 2px solid #7e9484; outline-offset: 2px; }
+.st-key-analytics_social [data-testid="stButton"] button:disabled { color: #526d59; background: #eff3ef; opacity: 1; }
 .st-key-analytics_social [data-testid="stBaseButton-elementToolbar"] { visibility: visible; }
 .st-key-analytics_social [data-testid="stCode"] > div { opacity: 1; visibility: visible; }
 </style>
 """, unsafe_allow_html=True)
-        st.markdown(
-            f'<p class="analytics-visitors">오늘 {count("today_visitors")}명 · 누적 {count("total_visitors")}명</p>',
-            unsafe_allow_html=True,
-        )
         liked = st.session_state.get("analytics_liked", False)
-        like_column, share_column = st.columns(2, gap="small")
+        today_column, total_column, like_column, share_column = st.columns(4, gap="small")
+        with today_column:
+            st.markdown(
+                f'<p class="analytics-label">오늘</p><p class="analytics-value">{count("today_visitors")}</p>',
+                unsafe_allow_html=True,
+            )
+        with total_column:
+            st.markdown(
+                f'<p class="analytics-label">누적</p><p class="analytics-value">{count("total_visitors")}</p>',
+                unsafe_allow_html=True,
+            )
         with like_column:
             st.button(
-                f'👍 {"좋아요 완료" if liked else "좋아요"} {count("likes")}',
+                f'👍 좋아요 {count("likes")}',
                 key="analytics_like", disabled=liked, on_click=like_analytics,
+                help="좋아요 완료" if liked else "좋아요",
                 use_container_width=True,
             )
         with share_column:
             st.button(
-                f'공유 {count("shares")}', key="analytics_share", on_click=share_analytics,
+                f'↗ 공유 {count("shares")}', key="analytics_share", on_click=share_analytics,
+                help="공유 링크 복사",
                 use_container_width=True,
             )
         if st.session_state.get("analytics_share_visible", False):
@@ -739,8 +761,8 @@ def render_today_market():
             """
             <section class="today-market" aria-labelledby="today-market-title">
                 <div class="today-market-heading">
-                    <h2 id="today-market-title" class="today-market-title">실시간 축산 도매 시세표</h2>
-                    <p class="today-market-caption">주요 축산물의 현재 도매 단가를 한눈에 확인하세요.</p>
+                    <p class="brand-label">도토리다판다</p>
+                    <h1 id="today-market-title" class="today-market-title">실시간 축산 도매 시세표</h1>
                 </div>
             </section>
             """,
@@ -749,18 +771,21 @@ def render_today_market():
         render_analytics_social()
         st.button(
             "오늘 시세표 접기" if st.session_state.today_market_selection else "오늘 시세표 보기",
-            key="today_market_overall",
+            key="today_market_overall_close" if st.session_state.today_market_selection else "today_market_overall",
             use_container_width=True,
             type="primary",
             on_click=toggle_today_market,
+            args=(not bool(st.session_state.today_market_selection),),
         )
         selected_report_id = st.session_state.today_market_selection
+        report_metadata = st.empty()
+        report_image = st.empty()
         if selected_report_id:
             saved_report = read_saved_market_report()
-            report_metadata = st.empty()
-            with st.container(key="today_market_image"):
-                report_area = st.empty()
-                download_area = st.empty()
+            with report_image.container():
+                with st.container(key="today_market_image"):
+                    report_area = st.empty()
+                    download_area = st.empty()
 
             def show_saved_report(saved):
                 with report_metadata.container():
@@ -819,6 +844,9 @@ def render_today_market():
                         "id=%s stage=auto_refresh status=failed failed_stage=%s", refresh_id, refresh_stage,
                     )
                     st.toast("최신 조회에 실패해 기존 시세표를 표시합니다.")
+        else:
+            report_metadata.empty()
+            report_image.empty()
 
 
 render_today_market()
@@ -838,18 +866,18 @@ body {
     color: #171a18; text-align: center;
 }
 .signup-card {
-    width: 100%; padding: 24px; border: 0;
+    width: 100%; padding: 20px 20px 8px; border: 0;
     background: #ffffff; position: relative;
 }
-.signup-title { margin: 0 0 12px; color: #12291f; font-size: 22px; font-weight: 750; line-height: 1.4; letter-spacing: -.025em; }
-.signup-description { margin: 0; color: #535c57; font-size: 14px; line-height: 1.65; word-break: keep-all; }
+.signup-title { margin: 0 0 10px; color: #12291f; font-size: 20px; font-weight: 750; line-height: 1.4; letter-spacing: -.025em; }
+.signup-description { margin: 0; color: #535c57; font-size: 13px; line-height: 1.6; letter-spacing: -.035em; white-space: nowrap; }
 .signup-entry {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
-    margin: 18px 0 14px; padding: 14px; border-radius: 9px; background: #f5f4ee;
+    display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 10px;
+    margin: 14px 0 12px; padding: 8px 10px; border: 1px solid #e4e9e5; border-radius: 12px; background: #f5f7f5;
 }
-.signup-entry-text { color: #173f30; font-size: 17px; font-weight: 750; line-height: 1.5; word-break: keep-all; }
-.signup-copy { flex-shrink: 0; padding: 6px 0 6px 8px; border: 0; background: transparent; color: #606762; font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.signup-note { margin: 0 0 18px; color: #747c77; font-size: 13px; line-height: 1.7; word-break: keep-all; }
+.signup-entry-text { display: flex; align-items: center; min-height: 36px; color: #173f30; font-size: 17px; font-weight: 750; line-height: 1.5; letter-spacing: -.025em; white-space: nowrap; }
+.signup-copy { display: flex; align-items: center; justify-content: center; flex-shrink: 0; height: 36px; padding: 0 4px; border: 0; background: transparent; color: #606762; font: inherit; font-size: 11px; line-height: 1.5; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.signup-note { margin: 0; color: #747c77; font-size: 13px; line-height: 1.6; white-space: nowrap; }
 .signup-cta {
     display: flex; align-items: center; justify-content: center; width: 100%;
     min-height: 50px; padding: 0 14px; border-radius: 10px;
@@ -868,11 +896,10 @@ body {
 .copy-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .copy-status.is-error { background: #8a3b32; font-size: 12px; white-space: normal; }
 @media (max-width: 700px) {
-    .signup-card { padding: 18px 18px 14px; }
-    .signup-title { font-size: 21px; margin-bottom: 8px; }
-    .signup-description { line-height: 1.55; }
-    .signup-note { margin-bottom: 12px; line-height: 1.55; }
-    .signup-entry { margin: 12px 0 10px; padding: 10px; }
+    .signup-card { padding: 18px 16px 8px; }
+    .signup-title { font-size: 18px; margin-bottom: 8px; white-space: nowrap; }
+    .signup-description { font-size: 12px; line-height: 1.55; }
+    .signup-entry { margin: 14px 0 10px; padding: 6px 8px; gap: 8px; }
     .signup-entry-text { font-size: 16px; }
 }
 </style>
@@ -880,12 +907,12 @@ body {
 <body>
 <section class="signup-card" aria-labelledby="signup-title">
     <h2 id="signup-title" class="signup-title">금천미트 처음 이용하시나요?</h2>
-    <p class="signup-description">회원가입 시 '가입경로 상세' 권오현 매니저 입력 필수!</p>
+    <p class="signup-description">회원가입 시 ‘가입경로 상세’에 권오현 입력</p>
     <div class="signup-entry">
         <span class="signup-entry-text">가입경로 상세 → 권오현</span>
         <button class="signup-copy" type="button">권오현 복사</button>
     </div>
-    <p class="signup-note">상담 없이 바로 가입 가능하며, 추천인 입력 시 권매니저 자동 매칭</p>
+    <p class="signup-note">가입 후 담당 매니저 자동 연결</p>
     <p class="copy-status" role="status" aria-live="polite"></p>
 </section>
 <script>
@@ -956,14 +983,15 @@ button.addEventListener('click', async () => {
 
 st.markdown("""
 <style>
-.st-key-signup_analytics_panel { border: 1px solid #e5e1d8; border-radius: 12px; overflow: hidden; padding-bottom: 24px; }
+.st-key-signup_analytics_panel { border: 1px solid #e0e5e1; border-radius: 16px; overflow: hidden; padding-bottom: 24px; background: #ffffff; }
 .st-key-signup_analytics_panel [data-testid="stVerticalBlock"] { gap: 0; }
 .st-key-analytics_signup { margin: 0 24px; width: calc(100% - 48px) !important; }
-.st-key-analytics_signup a { width: 100%; min-height: 50px; border: 0; border-radius: 10px; background: #173f30; color: #ffffff !important; font-weight: 700; text-decoration: none; }
-.st-key-analytics_signup a:hover { background: #123326; }
+.st-key-analytics_signup a { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 56px; border: 1px solid #cad5ce; border-radius: 12px; background: #ffffff; color: #173f30 !important; font-size: 15px; font-weight: 700; text-decoration: none; box-shadow: none; }
+.st-key-analytics_signup a p { font-size: 15px; font-weight: 700; }
+.st-key-analytics_signup a:hover { background: #f5f7f5; border-color: #173f30; }
 @media (max-width: 700px) {
-    .st-key-signup_analytics_panel { padding-bottom: 14px; }
-    .st-key-analytics_signup { margin: 0 18px; width: calc(100% - 36px) !important; }
+    .st-key-signup_analytics_panel { padding-bottom: 18px; }
+    .st-key-analytics_signup { margin: 0 20px; width: calc(100% - 40px) !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -977,16 +1005,23 @@ with st.container(key="signup_analytics_panel"):
 # 선택형 카카오 상담
 st.markdown("""
 <style>
-.st-key-analytics_kakao { margin-bottom: 12px; }
-.st-key-analytics_kakao a { position: relative; display: flex; justify-content: center; gap: 9px; width: 100%; min-height: 52px; padding: 10px 16px; border: 1px solid #fee500; border-radius: 10px; background: #fee500; color: #191919 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; }
+.st-key-analytics_kakao { margin-top: 4px; margin-bottom: 12px; }
+.st-key-analytics_kakao a { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 56px; padding: 10px 16px; border: 1px solid #fee500; border-radius: 12px; background: #fee500; color: #191919 !important; font-size: 15px; font-weight: 700; text-decoration: none !important; box-shadow: none; }
+.st-key-analytics_kakao a p { font-size: 15px; font-weight: 700; }
 .st-key-analytics_kakao a:hover { background: #f4dc00; border-color: #f4dc00; }
-.st-key-analytics_kakao a::before { content: ""; position: absolute; left: calc(50% - 86px); width: 20px; height: 15px; border-radius: 50%; background: #191919; }
 </style>
 """, unsafe_allow_html=True)
 st.link_button(
     "1:1 카카오톡 상담", KAKAO_CHAT_URL, key="analytics_kakao",
     on_click=record_analytics_action, args=("kakao_click",), use_container_width=True,
 )
+
+st.markdown("""
+<div class="service-footer">
+    <p class="service-operator"><strong>운영 · 권오현</strong><br>금천미트 영업 매니저</p>
+    <p>시세는 실시간 수집 데이터를 기반으로 하며<br>실제 판매가는 변동될 수 있습니다.</p>
+</div>
+""", unsafe_allow_html=True)
 
 # 재사용을 위해 검색 기능을 보관한다. 메인 화면에서는 호출하지 않는다.
 def render_menu_search():
