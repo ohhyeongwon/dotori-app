@@ -544,20 +544,48 @@ MARKET_REFRESH_LOGGER.propagate = False
 
 
 def read_saved_market_report(refresh_id=None, read_diagnostics=None):
+    # 이전 모듈이 로드된 배포 중에도 승인 seed의 버전은 판별할 수 있어야 한다.
+    expected_cta_version = A4_CTA_VERSION or "official-signup-20261117"
     for path in (MARKET_REPORT_CACHE, MARKET_REPORT_SEED):
         try:
             png = path.read_bytes()
             with Image.open(BytesIO(png)) as image:
-                generated_at = datetime.fromisoformat(image.info["generated_at"])
+                generated_at_text = image.info["generated_at"]
+                generated_at = datetime.fromisoformat(generated_at_text)
                 price_basis = image.info.get("price_basis")
+                cta_version = image.info.get("signup_cta_version")
                 if price_basis:
                     datetime.fromisoformat(price_basis)
                 image.verify()
-            # API 갱신 실패 시에도 마지막 정상 가격을 보존하며 승인 CTA를 제공한다.
-            if CTA_UPGRADE_AVAILABLE:
-                png = ensure_a4_signup_cta(png, 57)
-            else:
-                MARKET_REFRESH_LOGGER.info("id=%s CTA upgrade unavailable; keeping saved PNG", refresh_id)
+            if cta_version != expected_cta_version:
+                MARKET_REFRESH_LOGGER.info(
+                    "id=%s stage=cta_cache status=invalid path=%s actual=%s expected=%s",
+                    refresh_id, path, cta_version, expected_cta_version,
+                )
+                if not CTA_UPGRADE_AVAILABLE:
+                    MARKET_REFRESH_LOGGER.info(
+                        "id=%s CTA upgrade unavailable; skipping saved PNG path=%s", refresh_id, path,
+                    )
+                    continue
+                try:
+                    png = ensure_a4_signup_cta(png, 57)
+                    with Image.open(BytesIO(png)) as upgraded:
+                        if (upgraded.size != OVERALL_REPORT_SIZE
+                                or upgraded.info.get("signup_cta_version") != expected_cta_version
+                                or upgraded.info.get("generated_at") != generated_at_text
+                                or upgraded.info.get("price_basis") != price_basis):
+                            raise ValueError("CTA 갱신본의 승인 버전 또는 기존 기준시각이 일치하지 않습니다.")
+                        upgraded.verify()
+                except Exception:
+                    MARKET_REFRESH_LOGGER.warning(
+                        "id=%s stage=cta_cache status=upgrade_failed path=%s; skipping saved PNG",
+                        refresh_id, path, exc_info=True,
+                    )
+                    continue
+                MARKET_REFRESH_LOGGER.info(
+                    "id=%s stage=cta_cache status=upgraded path=%s version=%s",
+                    refresh_id, path, expected_cta_version,
+                )
             if read_diagnostics is not None:
                 read_diagnostics["source"] = "runtime" if path == MARKET_REPORT_CACHE else "repo_seed"
             MARKET_REFRESH_LOGGER.info(
