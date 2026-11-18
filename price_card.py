@@ -10,12 +10,14 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps, PngImagePlugin
 
 
 WIDTH = 1080
 HEIGHT = 1350
 OVERALL_REPORT_SIZE = (2480, 3508)
+A4_CTA_VERSION = "official-signup-20261117"
+A4_RENDER_PATH = "create_market_report_png->_create_a4_market_report->_draw_a4_signup_cta"
 CATEGORY_REPORT_SIZE = (1080, 1350)
 ASSET_DIR = Path(__file__).resolve().parent / "assets"
 DONGWON_LOGO_PATH = ASSET_DIR / "logos" / "dongwon-group-official.png"
@@ -989,6 +991,8 @@ def _draw_a4_signup_cta(canvas, draw, item_count):
     """공식 원본 자산으로 승인된 흰색 서비스 안내 카드를 그린다."""
     ink, body, primary = "#181819", "#44444A", "#90253F"
     box = (104, 3330, 2376, 3476)
+    # 기존 정상본에 CTA만 적용할 때 이전 직선 테두리와 문구도 지운다.
+    draw.rectangle(box, fill="white")
     draw.rounded_rectangle(box, radius=20, fill="white", outline=body, width=1)
 
     def paste_asset(name, xy, max_size):
@@ -1028,6 +1032,28 @@ def _draw_a4_signup_cta(canvas, draw, item_count):
               font=_a4_font(24), fill=body, anchor="rm")
     for x in (866, 1864):
         draw.line((x, 3360, x, 3451), fill="#e2e5df", width=1)
+
+
+def ensure_a4_signup_cta(png, item_count):
+    """조회 실패로 유지한 정상본도 가격·생성시각을 바꾸지 않고 CTA만 갱신한다."""
+    with Image.open(BytesIO(png)) as source:
+        if source.size != OVERALL_REPORT_SIZE:
+            raise ValueError("운영 시세표는 2480×3508 PNG여야 합니다.")
+        if source.info.get("signup_cta_version") == A4_CTA_VERSION:
+            return png
+        canvas = source.convert("RGB")
+        metadata = PngImagePlugin.PngInfo()
+        for key, value in source.text.items():
+            if key != "signup_cta_version":
+                metadata.add_text(key, value)
+        metadata.add_text("signup_cta_version", A4_CTA_VERSION)
+        # 원본의 생성 경로를 신규 전체 렌더로 잘못 기록하지 않는다.
+        metadata.add_text("cta_upgrade_path", "ensure_a4_signup_cta->_draw_a4_signup_cta")
+        dpi = source.info.get("dpi", (300, 300))
+    _draw_a4_signup_cta(canvas, ImageDraw.Draw(canvas), item_count)
+    output = BytesIO()
+    canvas.save(output, format="PNG", pnginfo=metadata, dpi=dpi, optimize=True)
+    return output.getvalue()
 
 
 def _create_a4_market_report(title, groups, queried_at):
@@ -1112,7 +1138,10 @@ def _create_a4_market_report(title, groups, queried_at):
             raise ValueError("A4 단가표 표시 영역을 초과했습니다.")
     _draw_a4_signup_cta(canvas, draw, sum(len(g["items"]) for g in groups))
     output = BytesIO()
-    canvas.save(output, format="PNG", dpi=(300, 300), optimize=True)
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text("signup_cta_version", A4_CTA_VERSION)
+    metadata.add_text("render_path", A4_RENDER_PATH)
+    canvas.save(output, format="PNG", pnginfo=metadata, dpi=(300, 300), optimize=True)
     return output.getvalue()
 
 

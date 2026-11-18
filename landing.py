@@ -15,11 +15,15 @@ from analytics import get_social_counts, record_event
 
 from menu_data import (
     KAKAO_CHAT_URL,
+    TODAY_MARKET_CATEGORIES,
     get_card_data,
     get_geumcheon_market_data,
     get_today_market_report,
 )
-from price_card import OVERALL_REPORT_SIZE, create_market_report_png, create_price_card_png
+from price_card import (
+    A4_CTA_VERSION, A4_RENDER_PATH, OVERALL_REPORT_SIZE,
+    create_market_report_png, create_price_card_png, ensure_a4_signup_cta,
+)
 
 # =================================================================
 # 1. 페이지 설정 및 디자인 CSS
@@ -543,6 +547,11 @@ def read_saved_market_report(refresh_id=None, read_diagnostics=None):
                 if price_basis:
                     datetime.fromisoformat(price_basis)
                 image.verify()
+            # API 갱신 실패 시에도 마지막 정상 가격을 보존하며 승인 CTA를 제공한다.
+            png = ensure_a4_signup_cta(png, sum(
+                item.get("item_id") != "hanwoo_hanging"
+                for group in TODAY_MARKET_CATEGORIES for item in group["items"]
+            ))
             if read_diagnostics is not None:
                 read_diagnostics["source"] = "runtime" if path == MARKET_REPORT_CACHE else "repo_seed"
             MARKET_REFRESH_LOGGER.info(
@@ -572,6 +581,9 @@ def save_market_report(png, generated_at, price_basis, refresh_id=None):
     )
     with Image.open(BytesIO(png)) as image:
         metadata = PngImagePlugin.PngInfo()
+        for key, value in image.text.items():
+            if key not in {"generated_at", "price_basis"}:
+                metadata.add_text(key, value)
         metadata.add_text("generated_at", generated_at.isoformat())
         metadata.add_text("price_basis", price_basis.isoformat())
         image.save(output, format="PNG", pnginfo=metadata, dpi=image.info.get("dpi", (300, 300)))
@@ -662,6 +674,16 @@ def _refresh_market_report_with_logs(refresh_id):
         queried_at=price_basis,
         canvas_size=OVERALL_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
     )
+    with Image.open(BytesIO(png)) as image:
+        if (image.size != OVERALL_REPORT_SIZE
+                or image.info.get("signup_cta_version") != A4_CTA_VERSION
+                or image.info.get("render_path") != A4_RENDER_PATH):
+            raise ValueError("승인된 A4 CTA 렌더 경로를 확인할 수 없습니다.")
+        MARKET_REFRESH_LOGGER.info(
+            "id=%s stage=render_cta status=success renderer=%s file=%s cta_version=%s render_path=%s",
+            refresh_id, create_market_report_png.__module__,
+            create_market_report_png.__code__.co_filename, A4_CTA_VERSION, A4_RENDER_PATH,
+        )
     MARKET_REFRESH_LOGGER.info("id=%s stage=render_png status=complete bytes=%s", refresh_id, len(png))
     save_market_report(png, datetime.now(ZoneInfo("Asia/Seoul")), price_basis, refresh_id)
 
