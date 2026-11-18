@@ -15,7 +15,6 @@ from analytics import get_social_counts, record_event
 
 from menu_data import (
     KAKAO_CHAT_URL,
-    TODAY_MARKET_CATEGORIES,
     get_card_data,
     get_geumcheon_market_data,
     get_today_market_report,
@@ -548,10 +547,7 @@ def read_saved_market_report(refresh_id=None, read_diagnostics=None):
                     datetime.fromisoformat(price_basis)
                 image.verify()
             # API 갱신 실패 시에도 마지막 정상 가격을 보존하며 승인 CTA를 제공한다.
-            png = ensure_a4_signup_cta(png, sum(
-                item.get("item_id") != "hanwoo_hanging"
-                for group in TODAY_MARKET_CATEGORIES for item in group["items"]
-            ))
+            png = ensure_a4_signup_cta(png, 57)
             if read_diagnostics is not None:
                 read_diagnostics["source"] = "runtime" if path == MARKET_REPORT_CACHE else "repo_seed"
             MARKET_REFRESH_LOGGER.info(
