@@ -1,3 +1,4 @@
+# redeploy trigger: 2026-11-18 streamlit runtime refresh
 import streamlit as st
 from html import escape
 from hashlib import sha256
