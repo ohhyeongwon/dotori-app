@@ -968,6 +968,8 @@ def _draw_price_table(draw, group, left, top, width, row_height):
             draw.text((left + 18, y + row_height - 13), detail, font=_font(16), fill="#6e786f", anchor="lm")
         value = item.get("kg_price")
         price = f"{value:,.0f}" if value is not None else ("미연결" if item["lookup"].get("method") is None else "조회 불가") if "lookup" in item else "조회 불가"
+        if item.get("display_status") == "품절" or item.get("availability_status") == "sold_out":
+            price = "품절"
         draw.text((left + width - 17, y + row_height / 2 - 1), price,
                   font=_font(37 if value is not None else 25, True),
                   fill="#123c2e" if value is not None else "#8b918b", anchor="rm")
@@ -1122,8 +1124,8 @@ def _create_a4_market_report(title, groups, queried_at):
                     if draw.textlength(label, font=name_font) <= column_width - 335:
                         break
                 value = item.get("kg_price")
-                price = f"{value:,.0f}" if value is not None else (
-                    "품절" if item.get("item_id") == "hanwoo_fat" and item.get("display_status") == "품절" else "-"
+                price = "품절" if item.get("display_status") == "품절" or item.get("availability_status") == "sold_out" else (
+                    f"{value:,.0f}" if value is not None else "-"
                 )
                 price_font = _a4_font(59, True)
                 if draw.textlength(label, font=name_font) + draw.textlength(price, font=price_font) > column_width - 80:

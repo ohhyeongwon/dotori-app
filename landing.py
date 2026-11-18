@@ -675,7 +675,7 @@ def _refresh_market_report_with_logs(refresh_id):
     items = [item for group in report["groups"] for item in group["items"]]
     sold_out_items = [
         item for item in items
-        if item.get("item_id") == "hanwoo_fat" and item.get("availability_status") == "sold_out"
+        if item.get("availability_status") == "sold_out"
     ]
     missing_items = [
         {"item_id": item.get("item_id"), "item_name": item.get("item_name")}
@@ -684,11 +684,11 @@ def _refresh_market_report_with_logs(refresh_id):
     source_errors = sum(d.get("status") == "error" for d in report.get("diagnostics", []))
     MARKET_REFRESH_LOGGER.info(
         "id=%s stage=validate_items status=%s expected_count=58 actual_count=%s count_matches=%s priced_count=%s source_errors=%s missing_items=%s sold_out_items=%s",
-        refresh_id, "success" if items and not missing_items and not source_errors else "failed",
+        refresh_id, "success" if len(items) == 58 and not missing_items and not source_errors else "failed",
         len(items), len(items) == 58, sum(item.get("kg_price") is not None for item in items), source_errors, missing_items,
         [item["item_id"] for item in sold_out_items],
     )
-    if not items or missing_items:
+    if len(items) != 58 or missing_items:
         raise ValueError("시세 조회가 완료되지 않았습니다.")
     if any(d.get("status") == "error" for d in report.get("diagnostics", [])):
         raise ValueError("시세 조회에 실패했습니다.")
@@ -698,7 +698,7 @@ def _refresh_market_report_with_logs(refresh_id):
             "category_name": group["category_name"],
             "items": [
                 {key: item.get(key) for key in (
-                    "item_id", "item_name", "storage_status", "kg_price", "display_status"
+                    "item_id", "item_name", "storage_status", "kg_price", "display_status", "availability_status"
                 )}
                 for item in group["items"]
             ],
