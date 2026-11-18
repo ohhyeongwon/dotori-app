@@ -19,9 +19,15 @@ from menu_data import (
     get_geumcheon_market_data,
     get_today_market_report,
 )
-from price_card import (
-    A4_CTA_VERSION, A4_RENDER_PATH, OVERALL_REPORT_SIZE,
-    create_market_report_png, create_price_card_png, ensure_a4_signup_cta,
+import price_card
+from price_card import OVERALL_REPORT_SIZE, create_market_report_png, create_price_card_png
+
+# 배포 중 이전 price_card 모듈이 남아 있어도 랜딩페이지는 시작한다.
+A4_CTA_VERSION = getattr(price_card, "A4_CTA_VERSION", None)
+A4_RENDER_PATH = getattr(price_card, "A4_RENDER_PATH", None)
+ensure_a4_signup_cta = getattr(price_card, "ensure_a4_signup_cta", None)
+CTA_UPGRADE_AVAILABLE = bool(
+    A4_CTA_VERSION and A4_RENDER_PATH and callable(ensure_a4_signup_cta)
 )
 
 # =================================================================
@@ -547,7 +553,10 @@ def read_saved_market_report(refresh_id=None, read_diagnostics=None):
                     datetime.fromisoformat(price_basis)
                 image.verify()
             # API 갱신 실패 시에도 마지막 정상 가격을 보존하며 승인 CTA를 제공한다.
-            png = ensure_a4_signup_cta(png, 57)
+            if CTA_UPGRADE_AVAILABLE:
+                png = ensure_a4_signup_cta(png, 57)
+            else:
+                MARKET_REFRESH_LOGGER.info("id=%s CTA upgrade unavailable; keeping saved PNG", refresh_id)
             if read_diagnostics is not None:
                 read_diagnostics["source"] = "runtime" if path == MARKET_REPORT_CACHE else "repo_seed"
             MARKET_REFRESH_LOGGER.info(
@@ -621,6 +630,10 @@ def refresh_market_report(refresh_id=None):
 
 
 def _refresh_market_report_with_logs(refresh_id):
+    if not CTA_UPGRADE_AVAILABLE:
+        # 승인 CTA를 생성할 수 없는 배포 상태에서는 가격 조회·정상본 교체를 하지 않는다.
+        MARKET_REFRESH_LOGGER.info("id=%s CTA upgrade unavailable; keeping saved PNG", refresh_id)
+        return
     MARKET_REFRESH_LOGGER.info("id=%s stage=api_query status=start", refresh_id)
     report = get_today_market_report(None, include_live_prices=True)
     MARKET_REFRESH_LOGGER.info("id=%s stage=api_query status=complete queried_at=%s", refresh_id, report.get("queried_at"))
