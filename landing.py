@@ -511,9 +511,10 @@ if "today_market_selection" not in st.session_state:
 
 
 def toggle_today_market(open_report):
-    # 같은 접기 요청이 재처리되어도 다시 열리지 않도록 목표 상태를 지정한다.
+    # 열 때마다 저장본이 아니라 실제 최신 조회를 다시 수행한다.
     st.session_state.today_market_selection = "all" if open_report else None
     st.session_state.today_market_refresh_pending = bool(st.session_state.today_market_selection)
+    st.session_state.today_market_live_report = None
     if st.session_state.today_market_selection:
         record_analytics_action("price_open")
 
@@ -606,7 +607,7 @@ def save_market_report(png, generated_at, price_basis, refresh_id=None):
 
 def refresh_market_report(refresh_id=None):
     try:
-        _refresh_market_report_with_logs(refresh_id)
+        return _refresh_market_report_with_logs(refresh_id)
     except Exception:
         MARKET_REFRESH_LOGGER.exception("id=%s stage=refresh_pipeline status=failed", refresh_id)
         raise
@@ -663,7 +664,10 @@ def _refresh_market_report_with_logs(refresh_id):
         canvas_size=OVERALL_REPORT_SIZE, kakao_chat_url=KAKAO_CHAT_URL,
     )
     MARKET_REFRESH_LOGGER.info("id=%s stage=render_png status=complete bytes=%s", refresh_id, len(png))
-    save_market_report(png, datetime.now(ZoneInfo("Asia/Seoul")), price_basis, refresh_id)
+    generated_at = datetime.now(ZoneInfo("Asia/Seoul"))
+    save_market_report(png, generated_at, price_basis, refresh_id)
+    # 화면에는 저장본을 다시 고르는 대신, 방금 검증·생성한 PNG를 직접 전달한다.
+    return png, generated_at, price_basis
 
 
 def render_market_report_download(report_png, snapshot_at):
@@ -781,69 +785,54 @@ def render_today_market():
         report_metadata = st.empty()
         report_image = st.empty()
         if selected_report_id:
-            saved_report = read_saved_market_report()
             with report_image.container():
                 with st.container(key="today_market_image"):
                     report_area = st.empty()
                     download_area = st.empty()
 
-            def show_saved_report(saved):
+            def show_market_report(report):
                 with report_metadata.container():
-                    if saved is None:
+                    if report is None:
                         st.info("시세표를 준비하고 있습니다.")
                         return
-                    report_png, generated_at, _ = saved
+                    report_png, generated_at, _ = report
                     st.markdown(
                         '<div class="today-market-selection">실시간 축산 도매 시세표</div>',
                         unsafe_allow_html=True,
                     )
-                    # 이 PNG의 가격 조회 검증 및 생성이 성공한 시각을 사용한다.
-                    # 파일 수정일이나 화면을 연 시각으로 대체하지 않는다.
                     st.caption(f"시세 기준 {generated_at.astimezone(ZoneInfo('Asia/Seoul')):%m.%d %H:%M}")
                 report_area.image(report_png, use_container_width=True)
                 with download_area.container():
                     render_market_report_download(report_png, generated_at)
 
-            # 이미지와 다운로드를 모두 먼저 전송한 뒤 자동 조회를 시작한다.
-            show_saved_report(saved_report)
+            # 시세표를 열면 저장본을 먼저 보여주지 않는다.
+            # 최신 API 조회 → 새 PNG 생성 → 그 생성본을 직접 표시한다.
             if st.session_state.pop("today_market_refresh_pending", False):
                 refresh_id = uuid4().hex[:12]
-                refresh_stage = "refresh_pipeline"
-                MARKET_REFRESH_LOGGER.info("id=%s stage=auto_refresh status=start", refresh_id)
+                MARKET_REFRESH_LOGGER.info("id=%s stage=live_first_refresh status=start", refresh_id)
                 try:
-                    # API 내부의 기존 5분 캐시를 그대로 사용한다.
-                    refresh_market_report(refresh_id)
-                    refresh_stage = "read_after_save"
-                    MARKET_REFRESH_LOGGER.info("id=%s stage=read_after_save status=start", refresh_id)
-                    read_diagnostics = {}
-                    latest_report = read_saved_market_report(refresh_id, read_diagnostics)
-                    runtime_read_ok = latest_report is not None and read_diagnostics.get("source") == "runtime"
-                    MARKET_REFRESH_LOGGER.log(
-                        logging.INFO if runtime_read_ok else logging.ERROR,
-                        "id=%s stage=read_after_save status=%s source=%s generated_at=%s",
-                        refresh_id, "success" if runtime_read_ok else "failed", read_diagnostics.get("source"),
-                        latest_report[1].isoformat() if latest_report is not None else None,
-                    )
-                    refresh_stage = "display_latest"
-                    report_changed = latest_report is not None and (
-                        saved_report is None or latest_report[0] != saved_report[0]
-                    )
-                    if latest_report is not None and (
-                        saved_report is None or latest_report[0] != saved_report[0]
-                    ):
-                        saved_report = latest_report
-                        show_saved_report(saved_report)
-                    MARKET_REFRESH_LOGGER.log(
-                        logging.INFO if runtime_read_ok else logging.ERROR,
-                        "id=%s stage=auto_refresh status=%s changed=%s",
-                        refresh_id, "success" if runtime_read_ok else "failed",
-                        report_changed,
+                    with st.spinner("최신 시세를 조회하고 있습니다."):
+                        live_report = refresh_market_report(refresh_id)
+                    st.session_state.today_market_live_report = live_report
+                    show_market_report(live_report)
+                    MARKET_REFRESH_LOGGER.info(
+                        "id=%s stage=live_first_refresh status=success generated_at=%s",
+                        refresh_id, live_report[1].isoformat(),
                     )
                 except Exception:
                     MARKET_REFRESH_LOGGER.exception(
-                        "id=%s stage=auto_refresh status=failed failed_stage=%s", refresh_id, refresh_stage,
+                        "id=%s stage=live_first_refresh status=failed", refresh_id,
                     )
+                    fallback_report = read_saved_market_report(refresh_id)
+                    st.session_state.today_market_live_report = fallback_report
+                    show_market_report(fallback_report)
                     st.toast("최신 조회에 실패해 기존 시세표를 표시합니다.")
+            else:
+                current_report = st.session_state.get("today_market_live_report")
+                if current_report is None:
+                    current_report = read_saved_market_report()
+                    st.session_state.today_market_live_report = current_report
+                show_market_report(current_report)
         else:
             report_metadata.empty()
             report_image.empty()
