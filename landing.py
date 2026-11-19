@@ -511,10 +511,8 @@ if "today_market_selection" not in st.session_state:
 
 
 def toggle_today_market(open_report):
-    # 열 때마다 저장본이 아니라 실제 최신 조회를 다시 수행한다.
     st.session_state.today_market_selection = "all" if open_report else None
     st.session_state.today_market_refresh_pending = bool(st.session_state.today_market_selection)
-    st.session_state.today_market_live_report = None
     if st.session_state.today_market_selection:
         record_analytics_action("price_open")
 
@@ -805,28 +803,47 @@ def render_today_market():
                 with download_area.container():
                     render_market_report_download(report_png, generated_at)
 
-            # 시세표를 열면 저장본을 먼저 보여주지 않는다.
-            # 최신 API 조회 → 새 PNG 생성 → 그 생성본을 직접 표시한다.
             if st.session_state.pop("today_market_refresh_pending", False):
                 refresh_id = uuid4().hex[:12]
-                MARKET_REFRESH_LOGGER.info("id=%s stage=live_first_refresh status=start", refresh_id)
-                try:
-                    with st.spinner("최신 시세를 조회하고 있습니다."):
-                        live_report = refresh_market_report(refresh_id)
-                    st.session_state.today_market_live_report = live_report
-                    show_market_report(live_report)
+
+                # 같은 런타임에서 5분 이내 생성된 정상본은 즉시 재사용한다.
+                # 반복해서 열 때마다 58개 API를 다시 조회해 사용자를 기다리게 하지 않는다.
+                saved_diagnostics = {}
+                recent_report = read_saved_market_report(refresh_id, saved_diagnostics)
+                recent_runtime = False
+                if recent_report is not None and saved_diagnostics.get("source") == "runtime":
+                    generated_at = recent_report[1].astimezone(ZoneInfo("Asia/Seoul"))
+                    age_seconds = (datetime.now(ZoneInfo("Asia/Seoul")) - generated_at).total_seconds()
+                    recent_runtime = 0 <= age_seconds <= 300
+
+                if recent_runtime:
+                    st.session_state.today_market_live_report = recent_report
+                    show_market_report(recent_report)
                     MARKET_REFRESH_LOGGER.info(
-                        "id=%s stage=live_first_refresh status=success generated_at=%s",
-                        refresh_id, live_report[1].isoformat(),
+                        "id=%s stage=market_open status=recent_runtime age_seconds=%s",
+                        refresh_id, round(age_seconds, 1),
                     )
-                except Exception:
-                    MARKET_REFRESH_LOGGER.exception(
-                        "id=%s stage=live_first_refresh status=failed", refresh_id,
-                    )
-                    fallback_report = read_saved_market_report(refresh_id)
-                    st.session_state.today_market_live_report = fallback_report
-                    show_market_report(fallback_report)
-                    st.toast("최신 조회에 실패해 기존 시세표를 표시합니다.")
+                else:
+                    MARKET_REFRESH_LOGGER.info("id=%s stage=live_first_refresh status=start", refresh_id)
+                    with report_metadata.container():
+                        st.info("최신 시세를 확인하고 있습니다. 완료되면 단가표가 바로 열립니다.")
+                    try:
+                        with st.spinner("58개 품목의 최신 가격을 조회 중입니다."):
+                            live_report = refresh_market_report(refresh_id)
+                        st.session_state.today_market_live_report = live_report
+                        show_market_report(live_report)
+                        MARKET_REFRESH_LOGGER.info(
+                            "id=%s stage=live_first_refresh status=success generated_at=%s",
+                            refresh_id, live_report[1].isoformat(),
+                        )
+                    except Exception:
+                        MARKET_REFRESH_LOGGER.exception(
+                            "id=%s stage=live_first_refresh status=failed", refresh_id,
+                        )
+                        fallback_report = recent_report or read_saved_market_report(refresh_id)
+                        st.session_state.today_market_live_report = fallback_report
+                        show_market_report(fallback_report)
+                        st.toast("최신 조회에 실패해 기존 시세표를 표시합니다.")
             else:
                 current_report = st.session_state.get("today_market_live_report")
                 if current_report is None:
